@@ -46,6 +46,13 @@ Key dependencies: `torch`, `transformers`, `flash-attn`, `liger-kernel`, `tensor
 
 For NVMe offload, set `--offload_dir` to a path on a fast local SSD.
 
+## Supported models
+
+- LLaMA family (1B–70B)
+- Qwen2.5 family
+- Mistral family
+- Other HuggingFace Transformers decoder-only models
+
 ## Quickstart — `main_dummy.py`
 
 `main_dummy.py` is the recommended first run. It trains on a `DummyDataset` (no real data needed) to verify the full pipeline works.
@@ -60,7 +67,9 @@ On a **multi-NUMA server**, binding to the GPU's NUMA node meaningfully improves
 numactl --cpunodebind=0 --membind=0 python main_dummy.py
 ```
 
-Common options:
+To find which NUMA node your GPU is on: `nvidia-smi topo -m`
+
+**Common options:**
 
 | Flag | Default | Description |
 |------|---------|-------------|
