@@ -1,18 +1,26 @@
+# Copyright 2025-2026 The SlideFormer Authors
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 import torch.nn as nn
 from transformers.modeling_utils import PreTrainedModel
 from transformers.modeling_outputs import CausalLMOutputWithPast
-from transformer_layer import split_transformer_model # 
+from transformer_layer import (
+    build_decoder_attention_mask,
+    split_transformer_model,
+)
 from utils.log_mem import log_memory_stats
 from utils.module_utils import _print_module_structure
+from utils.timer import format_timing_label
 import concurrent.futures
 import time
 import os
-from collections import deque, defaultdict, OrderedDict  # 新增导入
+from collections import defaultdict
 import queue
 from typing import Optional
 from optimizer import LayerAdam
 # from optimizer.hybrid_adam.layer_adam_nvme import LayerAdam
+from sliding_checkpoint import init_ac_gpu_prefetch_pool
 import torch.cuda.nvtx as nvtx
 
 class SlideFormerOffloader(nn.Module):
@@ -24,17 +32,20 @@ class SlideFormerOffloader(nn.Module):
         dtype: torch.dtype = torch.bfloat16,
         ac_offload_nvme: bool = False,
         offload_dir: str = '/RAID0',
-        double_buffer: bool = False, # 新增双缓冲，默认关闭，收益不高推荐显存内存充足时开启
-        enable_timing: bool = True,  # 新增参数控制计时功能
-        enable_memory_stats: bool = True,  # 新增参数控制内存统计功能
-        optimizer_kwargs: Optional[dict] = None,  # 新增参数传递优化器配置
+        double_buffer: bool = False,
+        enable_timing: bool = True,
+        enable_memory_stats: bool = True,
+        optimizer_kwargs: Optional[dict] = None,
+        auto_backward_in_forward: bool = True,
     ):
         
         super().__init__()
         self.device = device
         self.dtype = dtype
         self.double_buffer = double_buffer
-        
+        self.auto_backward_in_forward = auto_backward_in_forward
+        self._embed_update_pending = False
+
         # 保存对基础模型的引用，以便后续保存
         self.base_model = model
                 
@@ -59,7 +70,9 @@ class SlideFormerOffloader(nn.Module):
         
         # 修改GPU缓存队列大小策略
         gpu_cache_size = 2 if self.double_buffer else 1
-        self.gpu_unit_size = min(1 + gpu_cache_size, len(model.get_decoder().layers))
+        self.decoder = model.get_decoder()
+        self.decoder_layers = self.decoder.layers
+        self.gpu_unit_size = min(1 + gpu_cache_size, len(self.decoder_layers))
         self.gpu_cache_queue = queue.Queue(maxsize=self.gpu_unit_size)
         
         # 计算模型所有层中最大参数数量
@@ -95,7 +108,7 @@ class SlideFormerOffloader(nn.Module):
             "weight_decay": 0.01,
             "eps": 1e-8,
             "fp32_optimizer_state": True,
-            "num_layer": len(model.get_decoder().layers) + 2,  # 包括嵌入层和输出层
+            "num_layer": len(self.decoder_layers) + 2,  # 包括嵌入层和输出层
             "nvme_offload_fraction": 0.0, # 0为关闭，目前是0/0.5/1三档
             "offload_dir": offload_dir,
             "prefetch": True
@@ -104,16 +117,9 @@ class SlideFormerOffloader(nn.Module):
         self.layer_optimizer = LayerAdam(**optimizer_kwargs)
 
         # 保存模型配置
-        self.config = model.config
+        self.config = self.decoder.config
         self.ac_offload_nvme = ac_offload_nvme
         self.offload_dir = offload_dir
-        
-        #预估内存占用
-        self.param_size_bytes = self.total_param * 2
-        self.grad_size_bytes = self.max_param_size * 2
-        self.opt_state_bytes = self.total_param * 4 * 2
-        nvme_offload_fraction = optimizer_kwargs.get("nvme_offload_fraction", 0.0) if optimizer_kwargs else 0.0
-        self.opt_offload_bytes = self.opt_state_bytes * nvme_offload_fraction  
         
         # 分解模型组件并传入线程池和优化器
         components = split_transformer_model(
@@ -128,24 +134,40 @@ class SlideFormerOffloader(nn.Module):
             tied_grad_accum=self.tied_grad_accum,
             enable_timing=self.enable_timing,
             layer_optimizer=self.layer_optimizer,
-            double_buffer=self.double_buffer
+            double_buffer=self.double_buffer,
         )
         
         # 模型Layer
         self.transformer_layers = components['transformer_layers']
         self.rotary_emb = components['rotary_emb']
-        self._update_causal_mask = components['update_causal_mask']
         
         # 快捷访问
         self.embed_layer = self.transformer_layers[0]  # idx = -1
         self.output_layer = self.transformer_layers[-1]  # idx = num_layers
-        
-        # rotary_position_embeddings & causal_mask
-        self.rotary_emb = components['rotary_emb']
-        self._update_causal_mask = components['update_causal_mask']   
-        
-        # 激活值存储
-        self.position_embeddings = None
+
+        # 预估内存占用：复用已有统计量，保持公式简洁
+        self.dtype_size_bytes = torch.tensor([], dtype=self.dtype).element_size()
+        self.managed_param_numel = self.total_param - (
+            self.tied_param.numel() if self.is_tied else 0
+        )
+        self.stage_buffer_bytes = self.max_param_size * self.dtype_size_bytes
+
+        self.param_size_bytes = self.managed_param_numel * 4
+        self.grad_size_bytes = len(self.cpu_grad_tensor) * self.stage_buffer_bytes
+        self.convert_size_bytes = self.stage_buffer_bytes
+        self.tied_grad_size_bytes = (
+            self.tied_param.numel() * self.dtype_size_bytes if self.is_tied else 0
+        )
+
+        optimizer_state_elem_size = (
+            4 if getattr(self.layer_optimizer, "fp32_optimizer_state", True)
+            else self.dtype_size_bytes
+        )
+        self.opt_state_bytes = self.managed_param_numel * optimizer_state_elem_size * 2
+        nvme_offload_fraction = getattr(self.layer_optimizer, "nvme_offload_fraction", 0.0)
+        self.opt_offload_bytes = self.opt_state_bytes * nvme_offload_fraction
+
+        self._activation_layout_signature = None
         
         # Loss计算
         # self.loss_function = model.loss_function
@@ -187,7 +209,7 @@ class SlideFormerOffloader(nn.Module):
         
         # 计算decoder层参数数量
         decoder = model.get_decoder()
-        layers = decoder.layers if hasattr(decoder, 'layers') else decoder.block
+        layers = decoder.layers
         decoder_sizes = sum(p.numel() for p in layers[0].parameters())
         total_param += decoder_sizes * len(layers)
         
@@ -208,28 +230,13 @@ class SlideFormerOffloader(nn.Module):
         for _ in range(self.gpu_unit_size):
             cache_unit = {
                 "param": torch.empty(self.max_param_size, dtype=self.dtype, device=self.device),
-                "grad": torch.empty(self.max_param_size, dtype=self.dtype, device=self.device)
+                "grad": torch.empty(self.max_param_size, dtype=self.dtype, device=self.device),
+                # Reuse of a GPU cache unit must wait until the previous D2H
+                # stream work that reads from it has finished.
+                "reuse_ready": torch.cuda.Event(),
             }
+            cache_unit["reuse_ready"].record(torch.cuda.current_stream(self.device))
             self.gpu_cache_queue.put(cache_unit)
-        
-    def _verify_gpu_layers(self, ward, layer_number):
-        """验证GPU上的层数是否符合window_size限制"""
-        gpu_layers = 0
-        device_display = []  # 用于存储每一层的显示符号
-
-        for layer in self.transformer_layers:
-            layer_device = next(layer.layer.parameters()).device
-            # 判断当前层是否在 GPU 上，并记录显示符号
-            if layer_device == self.device:
-                device_display.append("G")
-                gpu_layers += 1
-            else:
-                device_display.append(".")
-
-        # 一次性打印所有层的设备状态
-        print("|".join(device_display))
-        # 打印最终结果并换行
-        # print(f" {ward} layer({layer_number}): layers_on_gpu({gpu_layers}) and window_size({self.window_size})")
         
     def _register_layer_hooks(self):
         """为每一层注册管理钩子"""
@@ -238,8 +245,6 @@ class SlideFormerOffloader(nn.Module):
         def get_pre_forward(idx):
             def hook(module, input):
                 """前向传播前预加载窗口中的下一层"""
-                # 预加载下一层（如果不是最后一个窗口）
-                # self._verify_gpu_layers("F", idx)
                 next_layer_idx = idx + 1
                 if next_layer_idx == num_layers-1:
                     self.transformer_layers[next_layer_idx].to_device_async(is_bwd=True)
@@ -261,11 +266,13 @@ class SlideFormerOffloader(nn.Module):
         def get_pre_backward(idx):
             def hook(module, grad_output):
                 """反向传播前预加载前一层"""
-                # def pre_backward_func(module):           
-                # self._verify_gpu_layers("B", idx)
                 # 预加载前一层（如果存在）
                 prev_layer_idx = idx - 1
                 if prev_layer_idx >= 0:
+                    if prev_layer_idx == 0 and self.is_tied:
+                        # Tied embedding backward must wait until output D2H has landed.
+                        self.output_layer.wait_for_d2h()
+                        self.tied_param.grad = None
                     self.transformer_layers[prev_layer_idx].to_device_async(is_bwd=True)
                 # module.h2d_ready.synchronize()  # 等待数据传输完成
                 module.wait_for_h2d()
@@ -288,12 +295,15 @@ class SlideFormerOffloader(nn.Module):
                         delattr(module, '_backward_start_time')
                         
                 module.compute_ready_bw.record(torch.cuda.current_stream())
+                if idx == 0 and self.is_tied:
+                    # Only tied embedding needs deferred update; untied embedding can follow normal layer flow.
+                    self._embed_update_pending = True
+                    return
                 # print(f"Post-Backward: {idx}")
                 # Embed的call func导致hook不准确，导致第一层在反向过程中提前释放，手动后向
                 # if idx == 0:
                 #     return None
                 
-                # 前一层更新完成判断（for only one grad tensor）
                 prev_update = None
                 
                 check_offset = 2 if self.double_buffer else 1
@@ -304,14 +314,9 @@ class SlideFormerOffloader(nn.Module):
                 elif self.double_buffer and check_idx == num_layers: 
                      # Double Buffering Special Case:
                      pass
-                     
-                # if idx + 1 != num_layers:
-                #     prev_update = self.transformer_layers[idx + 1].update_finished
-                # 所有层都要更新和卸载
+
                 module.to_offload_async(is_bwd=True, prev_update=prev_update)
                 module.update_params()
-                # module.update_finished.wait() # 需要注释，用于Ablation
-                # return BackwardFunction.apply(module, post_backward_func, input)
             return hook
         
         # 为所有层注册钩子
@@ -320,6 +325,32 @@ class SlideFormerOffloader(nn.Module):
             layer.register_forward_hook(get_post_forward(idx))
             layer.register_full_backward_pre_hook(get_pre_backward(idx))
             layer.register_full_backward_hook(get_post_backward(idx))
+
+
+    def _launch_pending_embed_update(self) -> None:
+        if not self._embed_update_pending:
+            return
+
+        prev_update = None
+        check_idx = 2 if self.double_buffer else 1
+        if check_idx < len(self.transformer_layers):
+            prev_update = self.transformer_layers[check_idx].update_finished
+
+        self.embed_layer.to_offload_async(is_bwd=True, prev_update=prev_update)
+        self.embed_layer.update_params()
+        self._embed_update_pending = False
+
+
+    def wait_for_completion(self) -> None:
+        """Drain outstanding H2D, D2H, and update work for the current step."""
+        self._launch_pending_embed_update()
+        for layer in self.transformer_layers:
+            layer.wait_for_h2d()
+        for layer in self.transformer_layers:
+            layer.wait_for_d2h()
+        for layer in self.transformer_layers:
+            layer.wait_for_update()
+        torch.cuda.synchronize(self.device)
 
     def print_layer_stats(self, layer_idx=None, show_history=False):
         """打印层统计信息
@@ -344,36 +375,55 @@ class SlideFormerOffloader(nn.Module):
             # 收集所有层的历史数据
             for layer in self.transformer_layers:
                 if layer.timer:
+                    layer.timer.flush_cuda_spans(force=True)
                     for op, times in layer.timer.timings.items():
                         all_stats[op].extend(times)
             print("\nHistorical Average Layer Statistics:")
             for op, times in all_stats.items():
                 avg = sum(times) / len(times)
-                print(f"  {op}: {avg*1000:.2f}ms (avg over {len(times)} calls)")
+                print(f"  {format_timing_label(op)}: {avg*1000:.2f}ms (avg over {len(times)} calls)")
         else:
             # 收集当前step的数据
             for layer in self.transformer_layers:
                 if layer.timer:
+                    layer.timer.flush_cuda_spans(force=True)
                     for op, duration in layer.timer.current_step.items():
                         all_stats[op].append(duration)
             print("\nCurrent Step Layer Statistics:")
             for op, durations in all_stats.items():
                 avg = sum(durations) / len(durations)
-                print(f"  {op}: {avg*1000:.2f}ms (avg across {len(durations)} layers)")
+                print(f"  {format_timing_label(op)}: {avg*1000:.2f}ms (avg across {len(durations)} layers)")
     
     def _print_memory_occupancy(self):
         """打印预估内存占用"""
         
         print(f"Model Type: {self.config.model_type}")
-        print(f"Estimated Memory Occupancy: {self.param_size_bytes / (1024 ** 3):.2f} GB (params) + "
-              f"{self.grad_size_bytes * (2 if self.double_buffer else 1) / (1024 ** 3):.2f} GB (grad) + "
-              f"{self.grad_size_bytes / (1024 ** 3):.2f} GB (convert) + "
-              f"{self.activation_bytes / (1024 ** 3):.2f} GB (activations) + "
-              f"{self.opt_state_bytes / (1024 ** 3):.2f} GB (optimizer state) - "
-              f"{self.opt_offload_bytes / (1024 ** 3):.2f} GB (os offload)",
-              f" - {self.activation_bytes / (1024 ** 3):.2f} GB (ac offload) " if self.ac_offload_nvme else ""
+        summary = (
+            f"Estimated Memory Occupancy: {self.param_size_bytes / (1024 ** 3):.2f} GB (params fp32) + "
+            f"{self.grad_size_bytes / (1024 ** 3):.2f} GB (grad buffers) + "
+            f"{self.convert_size_bytes / (1024 ** 3):.2f} GB (convert buffer)"
         )
-        estimated_memory = self.param_size_bytes + self.grad_size_bytes * (2 if self.double_buffer else 1) + self.grad_size_bytes + self.activation_bytes + self.opt_state_bytes - self.opt_offload_bytes
+        if self.tied_grad_size_bytes > 0:
+            summary += f" + {self.tied_grad_size_bytes / (1024 ** 3):.2f} GB (tied grad)"
+        summary += (
+            f" + {self.activation_bytes / (1024 ** 3):.2f} GB (activations) + "
+            f"{self.opt_state_bytes / (1024 ** 3):.2f} GB (optimizer state)"
+        )
+        if self.opt_offload_bytes > 0:
+            summary += f" - {self.opt_offload_bytes / (1024 ** 3):.2f} GB (os offload)"
+        if self.ac_offload_nvme:
+            summary += f" - {self.activation_bytes / (1024 ** 3):.2f} GB (ac offload)"
+        print(summary)
+
+        estimated_memory = (
+            self.param_size_bytes
+            + self.grad_size_bytes
+            + self.convert_size_bytes
+            + self.tied_grad_size_bytes
+            + self.activation_bytes
+            + self.opt_state_bytes
+            - self.opt_offload_bytes
+        )
         if self.ac_offload_nvme:
             estimated_memory -= self.activation_bytes
         print(f"Total CPU Estimated Memory: {estimated_memory / (1024 ** 3):.2f} GB")
@@ -386,22 +436,13 @@ class SlideFormerOffloader(nn.Module):
         self.layer_tensors = []
         
         for _ in range(num_layers-2):  # 不包括嵌入层和输出层
-            if self.config._attn_implementation == "flash_attention_2":
-                # Flash Attention使用形状为[batch_size, seq_length]的掩码
-                layer_cpu_tensors = [
-                    torch.empty((batch_size, seq_length, hidden_size), 
-                            dtype=self.dtype, pin_memory=True),  # hidden_state
-                    torch.empty((batch_size, seq_length), 
-                            dtype=torch.bool, pin_memory=True)   # attention_mask
-                    ]
-            else:
-                # SDPA使用形状为[batch_size, 1, seq_length, seq_length]的掩码
-                layer_cpu_tensors = [
-                    torch.empty((batch_size, seq_length, hidden_size), 
-                              dtype=self.dtype, pin_memory=True),  # hidden_state
-                    torch.empty((batch_size, 1, seq_length, seq_length), 
-                              dtype=self.dtype, pin_memory=True)   # attention_mask
-                    ]
+            layer_cpu_tensors = [
+                torch.empty(
+                    (batch_size, seq_length, hidden_size),
+                    dtype=self.dtype,
+                    pin_memory=True,
+                )
+            ]
             self.layer_tensors.append(layer_cpu_tensors)
         
         # 更新每个transformer层的layer_tensors引用
@@ -409,6 +450,9 @@ class SlideFormerOffloader(nn.Module):
             # 跳过嵌入层和输出层
             if 0 < i < len(self.transformer_layers) - 1:
                 layer.layer_cpu_tensors = self.layer_tensors
+
+        # 初始化 GPU activation prefetch buffer pool (所有层shape相同，用第一层做模板)
+        init_ac_gpu_prefetch_pool(self.layer_tensors[0], self.device)
                 
     def _allocate_activation_tensors_on_nvme(self, batch_size, seq_length, hidden_size):
         """
@@ -425,8 +469,7 @@ class SlideFormerOffloader(nn.Module):
             layer_dir = os.path.join(base_dir, f"layer_{i+1}")
             os.makedirs(layer_dir, exist_ok=True)
             hidden_path = os.path.join(layer_dir, f"hidden_state")
-            mask_path = os.path.join(layer_dir, f"attention_mask")
-            self.layer_tensor_files.append([hidden_path, mask_path])
+            self.layer_tensor_files.append([hidden_path])
                     
         # 更新每个transformer层的NVMe路径引用
         for i, layer in enumerate(self.transformer_layers):
@@ -435,57 +478,94 @@ class SlideFormerOffloader(nn.Module):
                 layer.ac_offload_nvme = self.ac_offload_nvme
         
         print(f"NVMe activation files init, for {len(self.layer_tensor_files)} decoder layers")
-    
-    def forward(self, input_ids, attention_mask=None, labels=None):
-        """模型的前向传播"""
+
+    def _ensure_activation_storage(self, batch_size, seq_length, hidden_size):
+        signature = (
+            batch_size,
+            seq_length,
+            hidden_size,
+            self.ac_offload_nvme,
+        )
+        if self._activation_layout_signature == signature:
+            return
+
+        self.layer_tensors = None
+        self.layer_tensor_files = None
+
+        if self.ac_offload_nvme:
+            self._allocate_activation_tensors_on_nvme(
+                batch_size,
+                seq_length,
+                hidden_size,
+            )
+        else:
+            self._allocate_activation_tensors_on_cpu(
+                batch_size,
+                seq_length,
+                hidden_size,
+            )
+
+        hidden_bytes = batch_size * seq_length * hidden_size * torch.tensor([], dtype=self.dtype).element_size()
+        self.activation_bytes = (len(self.transformer_layers) - 2) * hidden_bytes
+        self._activation_layout_signature = signature
+        self._print_memory_occupancy()
+
+    def forward(
+        self,
+        input_ids,
+        attention_mask=None,
+        labels=None,
+        position_ids=None,
+        return_dict=None,
+    ):
+        """模型的前向传播，保留 finetuning 常用的 Hugging Face 参数子集。
+
+        注意：
+        - `labels is not None` 时只执行一次输出层并返回 loss，不会额外重算 logits。
+        - `auto_backward_in_forward=False` 仅表示 backward 由外部触发，不改变上述输出语义。
+        """
         # 启用异常检测, 
         # torch.autograd.set_detect_anomaly(True, check_nan=True)
-        
-        # activation checkpointing
-        if self.layer_tensors is None and self.layer_tensor_files is None:
-            batch_size, seq_length = input_ids.size()
-            hidden_size = self.config.hidden_size
-            if self.ac_offload_nvme:
-                # NVMe offload
-                self._allocate_activation_tensors_on_nvme(batch_size, seq_length, hidden_size)
-            else:
-                # CPU offload
-                self._allocate_activation_tensors_on_cpu(batch_size, seq_length, hidden_size)
-            
-            # count
-            activation_size_per_layer = (
-                batch_size * seq_length * hidden_size * 2 +  # hidden_state (float16)
-                batch_size * seq_length * 1  # attention_mask (int64)/(int8)/(bool)
+
+        return_dict = True if return_dict is None else return_dict
+        if self._embed_update_pending:
+            raise RuntimeError(
+                "Previous backward still has a pending embedding update. "
+                "Call wait_for_completion() immediately after loss.backward()."
             )
-            self.activation_bytes = (len(self.transformer_layers) - 2) * activation_size_per_layer
-            self._print_memory_occupancy()
-            
-        # ----------------------- Forward Start -------------------------
-            
-        # Pre-Load Embedding and window_size-1 transformer layers
-        for i in range(0, min(1, len(self.transformer_layers))):
-            self.transformer_layers[i].to_device_async()
+
+        self.transformer_layers[0].to_device_async()
 
         if self.enable_memory_stats:
             print("Begin:"+log_memory_stats())
             
-        # Embedding Layer
-        # self.embed_layer.h2d_ready.synchronize()
         hidden_states = self.embed_layer(input_ids)
-        
-        causal_mask = None
-        # attention_mask (keep same as huggingface)
-        cache_position = torch.arange(
-            0, hidden_states.shape[1], device=hidden_states.device
-        )
-        causal_mask = self._update_causal_mask(attention_mask, hidden_states, cache_position, None, None)
 
-        # position_embeddings
-        if self.position_embeddings is None:
-            # self.rotary_emb.to(self.device)
+        cache_position = torch.arange(
+            0,
+            hidden_states.shape[1],
+            device=hidden_states.device,
+        )
+        if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
-            self.position_embeddings = self.rotary_emb(hidden_states, position_ids)
-            # self.rotary_emb.to('cpu')
+
+        causal_mask = build_decoder_attention_mask(
+            self.decoder,
+            hidden_states,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            cache_position=cache_position,
+        )
+
+        position_embeddings = None
+        if self.rotary_emb is not None:
+            position_embeddings = self.rotary_emb(hidden_states, position_ids)
+
+        self._ensure_activation_storage(
+            batch_size=hidden_states.shape[0],
+            seq_length=hidden_states.shape[1],
+            hidden_size=hidden_states.shape[2],
+        )
             
         # torch.cuda.empty_cache() # (gpu: -500MB)
         
@@ -494,7 +574,9 @@ class SlideFormerOffloader(nn.Module):
             hidden_states = self.transformer_layers[idx](
                 hidden_states,
                 attention_mask=causal_mask,
-                position_embeddings=self.position_embeddings
+                position_ids=position_ids,
+                cache_position=cache_position,
+                position_embeddings=position_embeddings,
             )
             # if hidden_states.isnan().any():
             #     raise ValueError(f"NaN detected in layer {idx} during forward pass")
@@ -506,41 +588,35 @@ class SlideFormerOffloader(nn.Module):
         if labels is not None:
             
             # Norm + LM Head + CrossEntropyLoss
-            loss = self.output_layer(hidden_states, labels, self.config.hidden_size)
+            loss = self.output_layer(hidden_states, labels=labels)
             
-            # Ablation Old One / No Fused Kernel
             # logits = logits = self.output_layer(hidden_states)
             # loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size)
             
             if self.enable_memory_stats:
                 print("Forward:" + log_memory_stats())
             
-            # 直接调用backward，hooks会处理层的加载/卸载
-            loss.backward()
+            # 兼容旧版训练脚本：默认在forward内触发backward
+            if self.auto_backward_in_forward:
+                loss.backward()
+                self.wait_for_completion()
 
-            # Embed要手动后向
-            # prev_update = self.transformer_layers[1].update_finished
-            # self.transformer_layers[0].to_offload_async(is_bwd=True, prev_update=prev_update)
-            # self.transformer_layers[0].update_params()
-            
-            # torch.cuda.empty_cache() # tmp
-            
-            if self.enable_memory_stats:
-                print("Backward:"+log_memory_stats()) # (第二次回来多了3G)
-                        
-            # 显示当前step所有层的平均
-            self.print_layer_stats(show_history=False)
+                if self.enable_memory_stats:
+                    print("Backward:"+log_memory_stats()) # (第二次回来多了3G)
 
-            # 显示所有历史数据的平均
-            # self.print_layer_stats(show_history=True)
+                # 显示当前step所有层的平均
+                self.print_layer_stats(show_history=False)
 
-            # 显示特定层的统计
-            # self.print_layer_stats(layer_idx=0, show_history=True)  # 显示第0层的历史统计
-            # self.print_layer_stats(layer_idx=0, show_history=False) # 显示第0层的当前step统计
+        else:
+            logits = self.output_layer(hidden_states, labels=None)
             
+        if not return_dict:
+            return tuple(value for value in (loss, logits) if value is not None)
+
         return CausalLMOutputWithPast(
             loss=loss,
-            logits=logits
+            logits=logits,
+            past_key_values=None,
         )
     
     def update_learning_rate(self, new_lr):
@@ -556,6 +632,7 @@ class SlideFormerOffloader(nn.Module):
         
         # 确保所有层都已经被卸载到CPU
         print("Make sure all layers updated...")
+        self.wait_for_completion()
         for i, layer in enumerate(self.transformer_layers):
             # 等待任何未完成的参数更新
             layer.wait_for_update()

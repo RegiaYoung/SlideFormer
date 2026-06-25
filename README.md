@@ -1,156 +1,271 @@
 # SlideFormer
 
-**Paper (DAC 2026): _An Efficient Heterogeneous Co-Design for Fine-Tuning on a Single GPU_**
+<div align="center">
 
-**SlideFormer** is a single-GPU LLM fine-tuning system that treats the entire heterogeneous platform (GPU + CPU RAM + NVMe) as a unified memory hierarchy. It enables fine-tuning of **100B+ models on a single RTX 4090** via three co-designed innovations:
+<h3>An Efficient Heterogeneous Co-Design for Fine-Tuning on a Single GPU</h3>
 
-- **Lightweight Asynchronous Engine**: maintains a small active window on the GPU and overlaps GPU compute with CPU optimizer updates and hierarchical I/O.
-- **Heterogeneous Memory Management**: pre-allocated GPU cache units and shared host-side gradient buffers reduce peak CPU/GPU memory by ~25–50%.
-- **Advanced I/O & Triton Kernels**: NVMe offload via io_uring/GPUDirect Storage, plus fused Triton kernels that resolve bottlenecks overlooked by prior systems.
+<p>
+  <a href="https://arxiv.org/pdf/2603.16428"><img src="https://img.shields.io/badge/Paper-arXiv%202603.16428-b31b1b" alt="Paper"></a>
+  <a href="https://doi.org/10.1145/3770743.3804125"><img src="https://img.shields.io/badge/DOI-10.1145%2F3770743.3804125-blue" alt="DOI"></a>
+  <a href="https://63dac.conference-program.com/presentation/?id=RESEARCH1286&sess=sess110"><img src="https://img.shields.io/badge/DAC%202026-Presentation-4c8eda" alt="DAC 2026 Presentation"></a>
+  <a href="https://github.com/RegiaYoung/SlideFormer/stargazers"><img src="https://img.shields.io/github/stars/RegiaYoung/SlideFormer?style=social" alt="GitHub stars"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-green" alt="License"></a>
+</p>
 
-Compared to existing frameworks: **1.40×–6.27× throughput**, ~50% GPU memory reduction, ~40% CPU memory reduction, 8× larger batch sizes, >95% peak GPU utilization on NVIDIA and AMD.
+<p>
+  <a href="#installation">Installation</a> |
+  <a href="#quick-start">Quick Start</a> |
+  <a href="#benchmarking">Benchmarking</a> |
+  <a href="#supported-models">Supported Models</a> |
+  <a href="#citation">Citation</a>
+</p>
+</div>
 
-## Repository layout
+**SlideFormer** is a PyTorch-based heterogeneous runtime for full-parameter
+fine-tuning on a single GPU. It co-designs layer-sliding execution,
+heterogeneous memory management, and asynchronous transfer/compute pipelines
+across GPU memory, CPU RAM, and optional NVMe storage. Only a compact active
+layer window is materialized on the GPU, while persistent training states are
+kept in CPU memory and cross-tier data movement is carefully scheduled
+throughout execution.
 
-```
-SlideFormer/
-├── offload_transformer.py      # End-to-end SlideFormer engine
-├── transformer_layer.py        # Async layer wrappers
-├── sliding_checkpoint.py       # CPU / NVMe activation offload implementation
-├── optimizer/layer_adam/       # LayerAdam optimizer (AVX-512/OpenMP C++ kernels)
-├── utils/                      # Metrics, dataset helpers, GPU monitor, timers
-│
-├── main_dummy.py               # Default entry – sanity-check
-├── main_bench.py               # Benchmark runner
-├── bench.sh                    # Sweep script calling main_bench.py
-├── main_profile.py             # torch.profiler friendly
-├── main_real.py                # Real fine-tuning example on MathFusionQA
-├── main_gpt.py                 # Comparison using GPT-2 model
-├── custom_gpt_model.py         # GPT-2 model to match prior-work
-│
-└── bench/                      # Baselines & unit experiments
-    ├── DeepSpeed/              # ZeRO-Offload baseline
-    ├── ColossalAI/             # Gemini baseline
-    └── cpu_adam_profile/       # CPU Adam microbenchmark
-```
+In our evaluation, SlideFormer achieves
+**1.40×–6.27× higher throughput** than related offloading baselines, reduces
+peak GPU memory by up to **50%** and peak CPU memory by up to **40%**,
+supports up to **8× larger batch sizes**, and enables full-parameter
+fine-tuning of **100B+ models** on a single commodity GPU.
 
-## Setup
+If this repository is useful to your work, please consider starring it.
+
+## News
+
+- **2026.06**: We released SlideFormer with expanded model compatibility,
+  reproducibility scripts, and a new
+  [fine-grained chunked pipeline](#fine-grained-chunked-overlap). A multi-GPU
+  extension of SlideFormer's heterogeneous runtime is under
+  active development and will be documented soon.
+- **2026.03**: SlideFormer was accepted to DAC 2026. The conference presentation
+  page is available [here](https://63dac.conference-program.com/presentation/?id=RESEARCH1286&sess=sess110), and the paper is available on
+  [arXiv](https://arxiv.org/pdf/2603.16428).
+- **Early 2025**: The initial SlideFormer system was developed and evaluated;
+  subsequent development has focused on system-level optimization.
+
+## Highlights
+
+- **Layer-sliding execution**: keeps only a compact active layer window on the
+  GPU, allowing full-parameter fine-tuning of models that exceed GPU memory
+  capacity.
+
+- **Lightweight asynchronous engine**: overlaps GPU computation with CPU
+  optimizer updates, FP32-to-BF16 conversion and H2D parameter transfers, D2H
+  gradient movement, activation offload/prefetch, and optional NVMe I/O.
+
+- **Heterogeneous memory hierarchy**: coordinates GPU memory, CPU RAM, and
+  optional local NVMe storage to reduce memory pressure while preserving
+  full-parameter mixed-precision training semantics.
+
+- **Memory-efficient implementation**: uses pre-allocated GPU cache units,
+  layer-shared host buffers, and a layer-wise CPU LayerAdam path to reduce
+  allocation overhead and peak GPU/CPU memory usage.
+
+## Installation
+
+SlideFormer is designed for single-GPU machines with sufficient CPU memory.
+The exact memory requirement depends on the model size, sequence length, batch
+size, optimizer state, and offload configuration.
+
+From our evaluation sweep, a practical estimate is
+**about 12 GB CPU RAM per 1B parameters +
+batch-dependent activation/buffer overhead**. NVMe optimizer/activation offload
+can further reduce the CPU-memory requirement at the cost of lower throughput.
 
 ```bash
+git clone https://github.com/RegiaYoung/SlideFormer.git
+cd SlideFormer
 conda env create -f environment.yml
 conda activate slideformer
 ```
 
-Key dependencies: `torch`, `transformers`, `flash-attn`, `liger-kernel`, `tensornvme`.  
-`flash-attn`, `liger-kernel`, and `tensornvme` are **optional** — the code falls back gracefully when they are not installed.
+Core dependencies are
+[`torch`](https://docs.pytorch.org/docs/stable/index.html),
+[`transformers`](https://huggingface.co/docs/transformers/en/index), and
+[`datasets`](https://huggingface.co/docs/datasets/en/index). Since the core
+runtime is mostly torch-native, SlideFormer can also run on AMD/ROCm GPUs with a
+compatible [PyTorch/ROCm stack](https://pytorch.org/get-started/locally/).
+Optional dependencies for acceleration/offload are
+[`flash-attn`](https://github.com/Dao-AILab/flash-attention),
+[`liger-kernel`](https://github.com/linkedin/Liger-Kernel), and
+[`tensornvme`](https://github.com/hpcaitech/TensorNVMe); the code falls back
+when they are not available. We recommend installing all optional dependencies
+to match the reported performance.
 
-For NVMe offload, set `--offload_dir` to a path on a fast local SSD.
+## Quick Start
 
-## Supported models
-
-- LLaMA family (1B–70B)
-- Qwen2.5 family
-- Mistral family
-- Other HuggingFace Transformers decoder-only models
-
-## Quickstart — `main_dummy.py`
-
-`main_dummy.py` is the recommended first run. It trains on a `DummyDataset` (no real data needed) to verify the full pipeline works.
+Run a dummy-data end-to-end sanity check:
 
 ```bash
-python main_dummy.py
+python scripts/main_dummy.py \
+  --model_path /path/to/Llama-3.1-8B-Instruct \
+  --seq_len 1024 \
+  --batch_size 64
 ```
 
-On a **multi-NUMA server**, binding to the GPU's NUMA node meaningfully improves CPU–GPU bandwidth:
+On multi-NUMA machines, binding the process to the GPU's NUMA node can improve
+CPU-GPU bandwidth:
 
 ```bash
-numactl --cpunodebind=0 --membind=0 python main_dummy.py
+numactl --cpunodebind=0 --membind=0 python scripts/main_dummy.py
 ```
 
-To find which NUMA node your GPU is on: `nvidia-smi topo -m`
+Useful options:
 
-**Common options:**
+| Option | Description |
+|---|---|
+| `--model_path` | Local path or HuggingFace model ID |
+| `--seq_len` | Sequence length |
+| `--batch_size` | Per-step batch size |
+| `--epochs` | Number of training epochs |
+| `--attn_implementation` | `flash_attention_2` or `sdpa` |
+| `--ac_offload_nvme` | Offload saved activations to NVMe |
+| `--nvme_offload_fraction` | Optimizer-state NVMe offload fraction |
+| `--offload_dir` | Directory used when NVMe offload is enabled |
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--model_path` | Llama-3.1-8B-Instruct | Local path or HuggingFace model ID |
-| `--seq_len` | 1024 | Sequence length |
-| `--batch_size` | 64 | Training batch size |
-| `--attn_implementation` | `flash_attention_2` | `flash_attention_2` or `sdpa` |
-| `--no-use_liger` | — | Disable Liger-kernel (auto-used when installed) |
-| `--ac_offload_nvme` | off | Offload activations to NVMe (default: CPU offload) |
-| `--offload_dir` | `./offload_dir` | Directory for NVMe / activation offload files |
-| `--no-use_bf16` | — | Disable BF16 (fall back to FP16) |
+## Real Data Example
 
-## Benchmarking — `main_bench.py` + `bench.sh`
-
-Single run with CSV output:
-
-```bash
-python main_bench.py \
-  --model_path /home/scc/models/Llama-3.1-8B-Instruct/ \
-  --seq_len 1024 --batch_size 64 \
-  --warm_step 3 --test_step 10 \
-  --result_file ./outputs/bench.csv
-```
-
-Sweep over multiple models and batch sizes (edit `MODEL_PATHS` / `BATCH_SIZES` in the script):
+`scripts/main_real.py` provides a real fine-tuning example on
+[QizhiPei/MathFusionQA](https://huggingface.co/datasets/QizhiPei/MathFusionQA).
 
 ```bash
-bash bench.sh
-```
-
-Results are written to `./outputs/` (gitignored). Metrics logged per step: tokens/s, TFLOPS, peak CPU RAM, peak VRAM, and GPU utilization.
-
-## Profiling — `main_profile.py`
-
-Generates a **Chrome trace** and **CUDA memory timeline** via `torch.profiler`:
-
-```bash
-python main_profile.py
-```
-
-Traces are saved to `./profile/` (gitignored). For full `nsys` profiling:
-
-```bash
-nsys profile -o ./outputs/nsys_trace python main_dummy.py
-```
-
-## Real fine-tuning — `main_real.py`
-
-End-to-end fine-tuning on **MathFusionQA** (auto-downloaded from HuggingFace Hub):
-
-```bash
-python main_real.py \
-  --model_path /home/scc/models/Llama-3.1-8B-Instruct/ \
-  --seq_len 4096 --batch_size 16 --epochs 1 \
+python scripts/main_real.py \
+  --model_path /path/to/Llama-3.1-8B-Instruct \
+  --seq_len 4096 \
+  --batch_size 16 \
+  --epochs 1 \
   --output_dir ./mathfusion-ft-results
 ```
 
-The script saves the trained model, tokenizer, loss curve (PDF), and loss data (CSV) to `--output_dir`.
+The script saves the trained model, tokenizer, loss curve, and loss CSV to
+`--output_dir`.
 
-## Fair comparison — `main_gpt.py`
+## Correctness Validation
 
-Uses a **custom GPT-style model** (`custom_gpt_model.py`) so that layer count, hidden size, and head count can exactly match configurations reported in prior work, enabling apple-to-apple throughput comparisons:
+SlideFormer tracks a DeepSpeed ZeRO-3 CPU-offload reference on both 40 distinct
+real-data batches and a repeated-batch overfit probe.
+
+![Correctness loss curves](bench/figure/correctness_loss_curves.png)
+
+## Benchmarking
+
+Single benchmark run:
 
 ```bash
-python main_gpt.py \
-  --num_layers 40 --hidden_dim 5120 --num_heads 80 \
-  --seq_len 1024 --batch_size 32
+python scripts/main_bench.py \
+  --model_path /path/to/Llama-3.1-8B-Instruct \
+  --seq_len 1024 \
+  --batch_size 64 \
+  --warm_step 3 \
+  --test_step 10 \
+  --result_file ./outputs/bench.csv
 ```
 
-## Baselines & unit experiments — `bench/`
+Sweep over configured models and batch sizes:
 
-| Directory | Baseline | How to run |
-|-----------|----------|-----------|
-| `bench/DeepSpeed/` | ZeRO-Offload (DeepSpeed) | `bash bench/DeepSpeed/ds_bench.sh` |
-| `bench/ColossalAI/` | Gemini (ColossalAI) | `bash bench/ColossalAI/bench_colossalai.sh` |
-| `bench/cpu_adam_profile/` | CPU Adam microbench | `bash bench/cpu_adam_profile/run_full_benchmark.sh` |
+```bash
+bash scripts/bench.sh
+```
 
-Unit experiments in `bench/`: `peak_tflops_test.py`, `bench_layer_transfer.py`, `test_kvikio_async.py`, `gsm8k_eval.py` (accuracy evaluation), and `find_batch_size_overlap_point.py`.
+For reproducibility, baseline implementations and adapted configs are collected
+under `bench/`, including [DeepSpeed](https://github.com/microsoft/DeepSpeed),
+[ColossalAI](https://github.com/hpcaitech/ColossalAI),
+[MegaTrain](https://github.com/DLYuanGod/MegaTrain), and
+[LoHan](https://github.com/RC4ML/LoHan). The supplemental figures below add a
+MegaTrain comparison alongside the paper baselines.
 
-All output files (CSVs, traces, figures) are gitignored by default.
+<table>
+  <tr>
+    <td align="center" width="38%">
+      <img src="bench/figure/figure7_llama8b_baseline.png" alt="Llama-3.1-8B baseline" width="100%"><br>
+      <sub><b>(a)</b> Batch-size scaling and CPU memory for Llama-3.1-8B on RTX 4090.</sub>
+    </td>
+    <td align="center" width="38%">
+      <img src="bench/figure/figure8_model_scaling.png" alt="Model scaling" width="100%"><br>
+      <sub><b>(b)</b> Model-size scaling and CPU memory for Qwen3 models on RTX 4090.</sub>
+    </td>
+    <td align="center" width="24%">
+      <img src="bench/figure/figure9_gpu_memory_vs_batch.png" alt="GPU memory vs batch size" width="100%"><br>
+      <sub><b>(c)</b> GPU allocated memory vs. batch size for Llama-3.1-8B.</sub>
+    </td>
+  </tr>
+</table>
+
+
+> **Note:** For fairness, all evaluated systems use the same workload
+> and enable the same fused kernels unless a framework already provides an
+> equivalent implementation. SlideFormer and all baselines except MegaTrain
+> follow mixed-precision training semantics with BF16 compute, FP32 master
+> parameters, and FP32 optimizer states. In the official MegaTrain single-GPU
+> path, CPU-resident model parameters are loaded and updated in BF16.
+> Its CPU-memory footprints are therefore shown for reference only.
+
+## Technical Updates
+
+### Fine-grained Chunked Overlap
+
+The 2026.06 release adds a chunked asynchronous transfer/update pipeline that
+splits long FP32-to-BF16 conversion, H2D parameter movement, D2H gradient
+return, and CPU Adam update into smaller overlapped segments. This reduces
+exposed transfer/update time under pipeline contention and improves Qwen3-8B
+single-GPU throughput, especially at small batch sizes.
+
+![Chunked pipeline efficiency](bench/figure/figure10_chunked_pipeline.png)
+
+## Supported Models
+
+- [Qwen2, Qwen2.5, and Qwen3](https://huggingface.co/Qwen)
+- [Llama 3, 3.1, 3.2, and 3.3](https://huggingface.co/meta-llama)
+- [Mistral models](https://huggingface.co/mistralai)
+- Other [HuggingFace decoder-only Transformers](https://huggingface.co/docs/transformers/model_doc/auto#transformers.AutoModelForCausalLM)
+
+Some model families may require light adapter changes for full compatibility.
+We will continue expanding tested model support.
+
+## Repository Layout
+
+```text
+SlideFormer/
+├── offload_transformer.py      # Runtime engine and scheduling
+├── transformer_layer.py        # Layer wrappers and CPU-GPU transfers
+├── sliding_checkpoint.py       # Activation offload and prefetch
+├── optimizer/                  # Layer-wise CPU Adam optimizer
+├── utils/                      # Datasets, metrics, and monitor helpers
+├── scripts/                    # Train, bench, and profile entries
+├── bench/                      # Baselines and reproducibility artifacts
+└── environment.yml             # Conda environment
+```
+
+## Citation
+
+If you use SlideFormer, its code, or its design ideas in your research, please
+cite our DAC 2026 paper.
+
+- Paper: [An Efficient Heterogeneous Co-Design for Fine-Tuning on a Single GPU](https://arxiv.org/pdf/2603.16428)
+- DAC 2026 presentation: [63rd ACM/IEEE Design Automation Conference](https://63dac.conference-program.com/presentation/?id=RESEARCH1286&sess=sess110)
+- DOI: [10.1145/3770743.3804125](https://doi.org/10.1145/3770743.3804125)
+- ISBN: `979-8-4007-2254-7`
+
+```bibtex
+@misc{yang2026efficientheterogeneouscodesignfinetuning,
+      title={An Efficient Heterogeneous Co-Design for Fine-Tuning on a Single GPU},
+      author={Ruijia Yang and Zeyi Wen},
+      year={2026},
+      eprint={2603.16428},
+      archivePrefix={arXiv},
+      primaryClass={cs.DC},
+      url={https://arxiv.org/abs/2603.16428},
+}
+```
 
 ## License
 
-Apache-2.0
+This project is released under the [Apache-2.0 License](LICENSE). See
+[NOTICE](NOTICE) for attribution and bundled third-party software information.

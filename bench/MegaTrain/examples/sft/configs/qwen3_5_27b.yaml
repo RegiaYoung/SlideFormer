@@ -1,0 +1,48 @@
+# Qwen 3.5 27B Model Configuration (Hybrid Linear + Full Attention, Dense)
+#
+# Architecture: 75% linear attention + 25% full attention (every 4th layer)
+# This is a DENSE model (no MoE). MegaTrain handles the hybrid attention
+# automatically via per-layer structure grouping.
+#
+# Requires: transformers >= 5.0 (for Qwen3.5 support)
+
+model:
+  name: "Qwen/Qwen3.5-27B"
+  dtype: "bfloat16"
+  device: 0
+  attn_implementation: "flash_attention_2"
+  trust_remote_code: true
+
+dataset:
+  # Option 1: Use dataset registry (recommended)
+  name: "metamath"
+  dataset_dir: "data"
+  # Option 2: Use direct path (legacy Arrow format)
+  # path: "/path/to/arrow/dataset"
+  # query_field: "query"
+  # response_field: "response"
+  max_seq_len: 1024
+  num_workers: 2
+
+training:
+  batch_size: 64
+  gradient_accumulation_steps: 1
+  num_steps: 500
+  learning_rate: 1.0e-5
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  seed: 42
+
+optimizer:
+  type: "deepspeed_adam"
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-8
+
+memory:
+  checkpoint_interval: 4
+  num_grad_slabs: 12
+
+logging:
+  log_interval: 1
+  enable_timing: true

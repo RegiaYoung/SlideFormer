@@ -1,3 +1,6 @@
+# Copyright 2025-2026 The SlideFormer Authors
+# SPDX-License-Identifier: Apache-2.0
+
 import os
 import time
 import hashlib

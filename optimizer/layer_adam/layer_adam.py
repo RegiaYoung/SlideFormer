@@ -1,3 +1,6 @@
+# Copyright 2025-2026 The SlideFormer Authors
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 import os
 import glob
@@ -424,6 +427,46 @@ class LayerAdam:
         
         return loss
     
+    @torch.no_grad()
+    def begin_chunk_step(self, layer_idx: int):
+        """Begin a chunked step: increment step counter and prefetch NVMe states.
+        Call once before the first step_chunk for this layer.
+        Returns the param_group for passing to step_chunk.
+        """
+        param_group = self.param_groups[layer_idx]
+        param_group['step'] += 1
+        self._pre_step(layer_idx)
+        return param_group
+
+    @torch.no_grad()
+    def step_chunk(self, param_flat, grad_flat, exp_avg_flat, exp_avg_sq_flat, param_group):
+        """Process one chunk of flat contiguous parameter/gradient tensors.
+        All four tensors must be sliced to the same [cs:ce] range by the caller.
+        This allows the D2H thread to produce grad chunks while the update thread
+        consumes and applies Adam to each chunk immediately.
+        """
+        self.cpu_adam.adam_update(
+            self.optimizer_id,
+            param_group['step'],
+            param_group['lr'],
+            param_group['betas'][0],
+            param_group['betas'][1],
+            param_group['eps'],
+            param_group['weight_decay'],
+            param_group['bias_correction'],
+            param_flat,
+            grad_flat,
+            exp_avg_flat,
+            exp_avg_sq_flat
+        )
+
+    @torch.no_grad()
+    def end_chunk_step(self, layer_idx: int):
+        """End a chunked step: offload NVMe optimizer states.
+        Call once after all step_chunk calls for this layer.
+        """
+        self._post_step(layer_idx)
+
     def update_learning_rate(self, new_lr):
         """更新优化器的学习率
         

@@ -9,7 +9,7 @@ USE_LIGER=1  # 1表示使用Liger-kernel，0表示使用普通模型
 LR=1e-5
 
 # 批次大小选项 4 8 16 32 64 128
-BATCH_SIZES=(8 16 32)
+BATCH_SIZES=(4 8 16 32 64)
 
 # 模型路径选项
 MODEL_PATHS=(

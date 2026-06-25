@@ -531,7 +531,7 @@ def main():
     #     dp_world_size=dp_size,
     # )
 
-    optimizer = HybridAdam(model.parameters())
+    optimizer = HybridAdam(model.parameters(), weight_decay=0.1)
     torch.set_default_dtype(torch.bfloat16)
     model, optimizer, _, dataloader, _ = booster.boost(model, optimizer, dataloader=dataloader)
 

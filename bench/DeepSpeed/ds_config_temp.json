@@ -1,9 +1,9 @@
 {
-    "train_batch_size": 32,
-    "train_micro_batch_size_per_gpu": 32,
+    "train_batch_size": 128,
+    "train_micro_batch_size_per_gpu": 128,
     "steps_per_print": 10,
     "optimizer": {
-        "type": "Adam",
+        "type": "AdamW",
         "params": {
             "lr": 1e-05,
             "betas": [
@@ -11,7 +11,7 @@
                 0.999
             ],
             "eps": 1e-08,
-            "weight_decay": 0.01
+            "weight_decay": 0.1
         }
     },
     "fp16": {
@@ -36,12 +36,7 @@
             "pin_memory": true
         },
         "stage3_param_persistence_threshold": 0,
-        "stage3_max_live_parameters": 100000000.0,
-        "stage3_prefetch_bucket_size": 500000000.0
-    },
-    "activation_checkpointing": {
-        "partition_activations": true,
-        "contiguous_memory_optimization": true,
-        "cpu_checkpointing": true
+        "stage3_max_live_parameters": 50000000.0,
+        "stage3_prefetch_bucket_size": 50000000.0
     }
 }

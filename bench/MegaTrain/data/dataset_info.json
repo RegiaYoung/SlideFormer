@@ -1,0 +1,110 @@
+{
+  "alpaca_en_demo": {
+    "file_name": "alpaca_en_demo.json"
+  },
+  "metamath": {
+    "hf_hub_url": "meta-math/MetaMathQA",
+    "columns": {
+      "prompt": "query",
+      "response": "response"
+    }
+  },
+  "alpaca_gpt4_en": {
+    "hf_hub_url": "vicgalle/alpaca-gpt4"
+  },
+  "open_platypus": {
+    "hf_hub_url": "garage-bAInd/Open-Platypus"
+  },
+  "mathinstruct": {
+    "hf_hub_url": "TIGER-Lab/MathInstruct",
+    "columns": {
+      "prompt": "instruction",
+      "response": "output"
+    }
+  },
+  "codealpaca": {
+    "hf_hub_url": "sahil2801/CodeAlpaca-20k"
+  },
+  "sharegpt4": {
+    "hf_hub_url": "shibing624/sharegpt_gpt4",
+    "formatting": "sharegpt"
+  },
+  "ultrachat_200k": {
+    "hf_hub_url": "HuggingFaceH4/ultrachat_200k",
+    "split": "train_sft",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content",
+      "user_tag": "user",
+      "assistant_tag": "assistant"
+    }
+  },
+  "open_thoughts": {
+    "hf_hub_url": "llamafactory/OpenThoughts-114k",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content",
+      "user_tag": "user",
+      "assistant_tag": "assistant"
+    }
+  },
+  "open_r1_math": {
+    "hf_hub_url": "llamafactory/OpenR1-Math-94k",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content",
+      "user_tag": "user",
+      "assistant_tag": "assistant"
+    }
+  },
+  "llava_instruct_150k": {
+    "hf_hub_url": "liuhaotian/LLaVA-Instruct-150K",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "conversations",
+      "images": "image"
+    },
+    "tags": {
+      "role_tag": "from",
+      "content_tag": "value",
+      "user_tag": "human",
+      "assistant_tag": "gpt"
+    }
+  },
+  "vqav2_small": {
+    "hf_hub_url": "merve/vqav2-small",
+    "split": "validation",
+    "num_samples": 200,
+    "columns": {
+      "prompt": "question",
+      "response": "multiple_choice_answer",
+      "images": "image"
+    }
+  },
+  "sharegpt4v": {
+    "hf_hub_url": "Lin-Chen/ShareGPT4V",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "conversations",
+      "images": "image"
+    },
+    "tags": {
+      "role_tag": "from",
+      "content_tag": "value",
+      "user_tag": "human",
+      "assistant_tag": "gpt"
+    }
+  }
+}

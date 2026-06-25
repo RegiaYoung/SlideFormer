@@ -176,7 +176,7 @@ dependencies:
       - kvikio-cu12==25.2.1
       - latex2sympy2-extended==1.10.1
       - libkvikio-cu12==25.2.1
-      - liger-kernel==0.5.8
+      - liger-kernel==0.6.5
       - llm-blender==0.0.2
       - lm-eval==0.4.7
       - lxml==5.3.2

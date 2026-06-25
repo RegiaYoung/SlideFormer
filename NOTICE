@@ -1,0 +1,31 @@
+SlideFormer
+Copyright 2025-2026 The SlideFormer Authors
+
+This product is developed by the SlideFormer authors. The canonical source is:
+https://github.com/RegiaYoung/SlideFormer
+
+The associated publication is:
+"An Efficient Heterogeneous Co-Design for Fine-Tuning on a Single GPU"
+DOI: 10.1145/3770743.3804125
+
+This distribution includes or adapts third-party software:
+
+- Benchmark integrations under bench/DeepSpeed/ use Microsoft DeepSpeed,
+  licensed under the Apache License 2.0.
+  Upstream: https://github.com/microsoft/DeepSpeed
+- Benchmark integrations under bench/ColossalAI/ use or adapt ColossalAI
+  examples, licensed under the Apache License 2.0.
+  Upstream: https://github.com/hpcaitech/ColossalAI
+- MegaTrain, under bench/MegaTrain/, licensed under the Apache License 2.0.
+  Upstream: https://github.com/DLYuanGod/MegaTrain
+- LoHan, under bench/LoHan/, licensed under the Apache License 2.0.
+  Upstream: https://github.com/RC4ML/LoHan
+- Components derived from Microsoft DeepSpeed and NVIDIA Apex under
+  optimizer/layer_adam/. Their original copyright and license notices are
+  retained in the corresponding source files.
+- The vendored fused linear cross-entropy implementation is derived from
+  LinkedIn Liger Kernel under the BSD 2-Clause License.
+  Upstream: https://github.com/linkedin/Liger-Kernel
+
+Third-party names and trademarks belong to their respective owners. This
+NOTICE file is informational and does not modify the terms of LICENSE.

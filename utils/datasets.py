@@ -1,3 +1,6 @@
+# Copyright 2025-2026 The SlideFormer Authors
+# SPDX-License-Identifier: Apache-2.0
+
 import json
 import torch
 from torch.utils.data import Dataset
@@ -121,6 +124,7 @@ class DummyDataset(Dataset):
         self.size = size
         self.max_length = max_length
         self.vocab_size = 32000  # Default for Llama models
+        self.pad_token_id = tokenizer.pad_token_id if tokenizer is not None and tokenizer.pad_token_id is not None else 0
         
         if tokenizer is not None:
             self.vocab_size = tokenizer.vocab_size
@@ -134,13 +138,14 @@ class DummyDataset(Dataset):
         
         # Generate random attention_mask (mostly 1s with some 0s at the end)
         # Ensure it's not all ones by capping seq_length to be less than max_length
-        seq_length = torch.randint(self.max_length // 3, self.max_length - 1, (1,)).item()
+        seq_length = torch.randint(max(2, self.max_length // 3), self.max_length, (1,)).item()
         
         # Here use bool for attention_mask (maybe only for PyTorch 2.0+ or flash_attn)
         attention_mask = torch.zeros(self.max_length, dtype=torch.bool)
         attention_mask[:seq_length] = 1
         # attention_mask = torch.ones(self.max_length, dtype=torch.long)
         # attention_mask[self.max_length - 1] = 0
+        input_ids[seq_length:] = self.pad_token_id
         
         # Create labels - simulate instruction following format
         labels = input_ids.clone()
@@ -149,7 +154,9 @@ class DummyDataset(Dataset):
         labels[attention_mask == 0] = -100
         
         # Simulate instruction part with -100 labels for first portion
-        instruction_length = torch.randint(10, min(100, self.max_length // 5), (1,)).item()
+        inst_high = max(11, min(100, self.max_length // 5))
+        instruction_length = torch.randint(10, inst_high, (1,)).item()
+        instruction_length = min(instruction_length, seq_length - 1)
         labels[:instruction_length] = -100
         
         return {

@@ -1,0 +1,37 @@
+{
+    "zero_config": {
+      "offload_optimizer": {
+        "device": "nvme",
+        "nvme_path": "/RAID0/data12",
+        "buffer_count": 8,
+        "pipeline_read": false,
+        "pipeline_write": false,
+        "pin_memory": true
+      },
+      "offload_param": {
+        "device": "nvme",
+        "nvme_path": "/RAID0/data12",
+        "pin_memory": true,
+        "buffer_count": 6,
+        "buffer_size": 1.2e9,
+        "max_in_cpu": 1e8
+      },
+      "offload_act": {
+        "device": "nvme",
+        "nvme_path": "/RAID0/data12",
+        "pin_memory": true,
+        "buffer_count": 4,
+        "buffer_size": 1.2e9,
+        "max_in_cpu": 1e8
+      }
+    },
+    "aio_config": {
+      "block_size": 1048576,
+      "queue_depth": 32,
+      "single_submit": false,
+      "pipeline_read": true,
+      "pipeline_write": true,
+      "overlap_events": true,
+      "thread_count": 2
+    }
+  }

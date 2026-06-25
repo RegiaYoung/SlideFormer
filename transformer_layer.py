@@ -1,28 +1,79 @@
+# Copyright 2025-2026 The SlideFormer Authors
+# SPDX-License-Identifier: Apache-2.0
+
 import threading
+import queue
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 import concurrent.futures
 from transformers.modeling_utils import PreTrainedModel
 from typing import Dict, Any, Optional
 from collections import OrderedDict
 from utils.timer import LayerTimer
+from utils.legacy_fused_linear_cross_entropy import LegacyFusedLinearCrossEntropyLoss
 from sliding_checkpoint import SlidingCheckpoint, save_on_cpu
 import time
 import torch.cuda.nvtx as nvtx
 
-try:
-    from liger_kernel.transformers.fused_linear_cross_entropy import (
-        LigerFusedLinearCrossEntropyLoss,
-    )
-except ModuleNotFoundError:
-    LigerFusedLinearCrossEntropyLoss = None
-
 _compute_stream = torch.cuda.default_stream()
 _h2d_stream = torch.cuda.Stream()
 _d2h_stream = _h2d_stream
-# _d2h_stream = _h2d_stream
+# _d2h_stream = torch.cuda.Stream()
+
+# Chunked H2D overlaps fp32->bf16 CPU conversion with PCIe DMA.
+H2D_CHUNK_SIZE = 32 * 1024 * 1024
+D2H_CHUNK_SIZE = 32 * 1024 * 1024
+
+def build_decoder_attention_mask(
+    decoder: nn.Module,
+    hidden_states: torch.Tensor,
+    attention_mask: Optional[torch.Tensor] = None,
+    position_ids: Optional[torch.LongTensor] = None,
+    cache_position: Optional[torch.LongTensor] = None,
+    past_key_values=None,
+):
+    """Build the decoder attention mask for llama-like dense models across HF versions."""
+    decoder_config = decoder.config
+
+    legacy_update_causal_mask = getattr(decoder, "_update_causal_mask", None)
+    if legacy_update_causal_mask is not None:
+        try:
+            return legacy_update_causal_mask(
+                attention_mask,
+                hidden_states,
+                cache_position,
+                past_key_values,
+                None,
+            )
+        except TypeError:
+            return legacy_update_causal_mask(
+                attention_mask,
+                hidden_states,
+                cache_position,
+                past_key_values,
+            )
+
+    try:
+        from transformers.masking_utils import create_causal_mask
+    except ImportError as exc:
+        raise RuntimeError(
+            "Could not import `transformers.masking_utils`. "
+            "Please use a transformers version that provides either "
+            "`decoder._update_causal_mask` (v4.x) or `masking_utils.create_causal_mask` (v5.x)."
+        ) from exc
+
+    if position_ids is None and cache_position is not None:
+        position_ids = cache_position.unsqueeze(0)
+
+    return create_causal_mask(
+        config=decoder_config,
+        inputs_embeds=hidden_states,
+        attention_mask=attention_mask,
+        cache_position=cache_position,
+        past_key_values=past_key_values,
+        position_ids=position_ids,
+    )
 
 def split_transformer_model(
     model: PreTrainedModel, 
@@ -30,12 +81,7 @@ def split_transformer_model(
     dtype: torch.dtype = torch.bfloat16,
     **kwargs
 ) -> Dict[str, Any]:
-    """
-    Split the model and build wrappers. If tie_word_embeddings (embed.weight is lm_head.weight),
-    we do:
-      - embedding wrapper owns tied weight update, uses tied_grad_accum as its cpu_grad_tensor, and accumulates grads
-      - output wrapper skips tied weight for mapping/optimizer, but still loads it to GPU and accumulates its grad into tied_grad_accum
-    """
+    """Split the model and route tied gradients through the embedding owner."""
     # ---- embed和lm_head是否共享参数 ----
     tied_param = kwargs.pop("tied_param", None)
     tied_grad_accum = kwargs.pop("tied_grad_accum", None)
@@ -73,7 +119,7 @@ def split_transformer_model(
     decoder = model.get_decoder()
     
     # ---- 处理decoder层 (idx = 1 ~ num_layers) ----
-    layers = decoder.layers if hasattr(decoder, 'layers') else decoder.block
+    layers = decoder.layers
     num_layers = len(layers)
     for idx, layer in enumerate(layers, start=1):
         decoder_layer = DecoderWrapper(
@@ -106,8 +152,7 @@ def split_transformer_model(
     
     components = {
         'transformer_layers': all_layers,
-        'rotary_emb': decoder.rotary_emb,
-        'update_causal_mask': decoder._update_causal_mask
+        'rotary_emb': getattr(decoder, 'rotary_emb', None),
     }
     
     return components
@@ -168,6 +213,7 @@ class OffloadLayerWrapper(nn.Module):
         self.update_lock = threading.Lock()
         self._h2d_future = None
         self._d2h_future = None
+        self._d2h_chunk_queue = queue.Queue(maxsize=4)
         
         # ---- tie bookkeeping ----
         self.skip_params = skip_params or set()
@@ -271,7 +317,8 @@ class OffloadLayerWrapper(nn.Module):
         def _h2d_task():
             self.wait_for_update()
             nvtx.range_push(f"H2D_Layer_{self.layer_idx}")
-            
+            if self.enable_timing:
+                self.h2d_stream.synchronize()
             # if prev_offload is not None:
             #     self.h2d_stream.wait_event(prev_offload)
                 
@@ -280,6 +327,7 @@ class OffloadLayerWrapper(nn.Module):
                 start = time.perf_counter() if self.enable_timing else None
                 
                 self._current_gpu_cache = self.gpu_cache_queue.get()
+                self.h2d_stream.wait_event(self._current_gpu_cache["reuse_ready"])
                 if is_bwd:
                     self._current_gpu_cache['grad'].zero_()
                 # self._current_gpu_cache = {
@@ -288,24 +336,15 @@ class OffloadLayerWrapper(nn.Module):
                 #     }
                 
                 with torch.no_grad():
-                    # fp32 -> bf16 staging -> gpu
-                    self.bf16_param_tensor[:self.total_size].copy_(self._cpu_params_flat) # , non_blocking=True
-                    self._current_gpu_cache['param'][:self.total_size].copy_(self.bf16_param_tensor[:self.total_size], non_blocking=True)
-                    
-                    # Wrong for the views reused (torch)
-                    # # Cache View projection L_i GET Unit_{i mod W+1(2)}, can directly view the cache 0 1 2 3
-                    # if not hasattr(self, '_param_cache_views'):
-                    #     self._param_cache_views = OrderedDict()
-                    #     self._grad_cache_views = OrderedDict()
-                    #     for name, param in self.layer.named_parameters():
-                    #         offset, shape, size = self._param_maps[name]
-                    #         self._param_cache_views[name] = self._current_gpu_cache['param'][offset:offset + size].view(shape)
-                    #         self._grad_cache_views[name] = self._current_gpu_cache['grad'][offset:offset + size].view(shape)
-
-                    # for name, param in self.layer.named_parameters():
-                    
-                    #     param.data = self._param_cache_views[name]
-                    #     param.grad = self._grad_cache_views[name]
+                    # Interleave fp32->bf16 CPU conversion with PCIe DMA.
+                    chunk = H2D_CHUNK_SIZE
+                    src_fp32 = self._cpu_params_flat
+                    staging = self.bf16_param_tensor
+                    dst_gpu = self._current_gpu_cache['param']
+                    for cs in range(0, self.total_size, chunk):
+                        ce = min(cs + chunk, self.total_size)
+                        staging[cs:ce].copy_(src_fp32[cs:ce])
+                        dst_gpu[cs:ce].copy_(staging[cs:ce], non_blocking=True)
                         
                     for name, param in self._managed_named_params:
                         offset, shape, size = self._param_maps[name]
@@ -316,8 +355,13 @@ class OffloadLayerWrapper(nn.Module):
                     if self._is_tied_output:
                         off = self.total_size
                         n = self._tied_numel
-                        self.bf16_param_tensor[off:off + n].copy_(self._tied_cpu_view.view(-1))
-                        self._current_gpu_cache['param'][off:off + n].copy_(self.bf16_param_tensor[off:off + n], non_blocking=True)
+                        tied_src = self._tied_cpu_view.view(-1)
+
+                        for cs in range(0, n, chunk):
+                            ce = min(cs + chunk, n)
+                            staging[off + cs:off + ce].copy_(tied_src[cs:ce])
+                            dst_gpu[off + cs:off + ce].copy_(staging[off + cs:off + ce], non_blocking=True)
+
                         self.tied_param.data = self._current_gpu_cache['param'][off:off + n].view(self.tied_param.shape)
                         self.tied_param.grad = self._current_gpu_cache['grad'][off:off + n].view(self.tied_param.shape) if is_bwd else None
                         
@@ -338,65 +382,88 @@ class OffloadLayerWrapper(nn.Module):
             # print(f"Waiting for layer {self.layer_idx} h2d transfer...")
             self._h2d_future.result()
 
-    def to_offload_async(self, is_bwd=False, prev_update = None):
-        """异步卸载到CPU - 使用专用D2H线程池"""
+    def to_offload_async(self, is_bwd=False, prev_update=None):
+        """异步卸载到 CPU；backward 走 chunked D2H+update，forward 只恢复参数视图。"""
         def _d2h_task(is_bwd=is_bwd, prev_update=prev_update):
             if is_bwd:
                 self.d2h_stream.wait_event(self.compute_ready_bw)
+                if prev_update is not None and not prev_update.is_set():
+                    # print(f"Waiting for layer {self.layer_idx + 1} update...")
+                    prev_update.wait()
+                # Drain the GPU-side wait_event before timing starts,
+                # so d2h_transfer_bw only measures actual DMA time.
+                if self.enable_timing:
+                    self.d2h_stream.synchronize()
             else:
                 self.d2h_stream.wait_event(self.compute_ready)
                 
-            if prev_update is not None and not prev_update.is_set():
-                # print(f"Waiting for layer {self.layer_idx + 1} update...")
-                prev_update.wait()
-                
             nvtx.range_push(f"D2H_Layer_{self.layer_idx}")
-            with torch.cuda.stream(self.d2h_stream):    
+            with torch.cuda.stream(self.d2h_stream):
                 # print(f"Layer {self.layer_idx} d2h transfer begin...")
                 start = time.perf_counter() if self.enable_timing else None
-                with torch.no_grad():        
-                    # for name, param in self.layer.named_parameters():
-                    #     if is_bwd:
-                    #         self._grad_views[name].copy_(param.grad, non_blocking=True) # 
-                    #     param.data = self._param_views[name]
-                    #     param.grad = self._grad_views[name]                    
+                with torch.no_grad():
                     if is_bwd:
-                        # 1. 普通参数梯度拷贝
-                        self._cpu_grads_flat[:self.total_size].copy_(self._current_gpu_cache['grad'][:self.total_size], non_blocking=True) 
-                        
-                        # 2. output-layer tied grad offloading
-                        if self._is_tied_output:
-                            self.tied_grad_accum.copy_(self._current_gpu_cache['grad'][self.total_size:self.total_size + self._tied_numel], non_blocking=True)
-                        
-                        # 3. 统一等待所有拷贝完成
-                        self.d2h_stream.synchronize()
-                        
-                        # embed-layer tied grad accumulation
+                        gpu_grad = self._current_gpu_cache['grad']
+                        chunk = D2H_CHUNK_SIZE
+
+                        # Tied owner must merge shared grad before exposing chunks to Adam.
                         if self._is_tied_owner:
-                            self._cpu_grads_flat[self._tied_owner_offset:self._tied_owner_offset + self._tied_numel].add_(self.tied_grad_accum)
+                            for cs in range(0, self.total_size, chunk):
+                                ce = min(cs + chunk, self.total_size)
+                                self._cpu_grads_flat[cs:ce].copy_(gpu_grad[cs:ce], non_blocking=True)
+
+                            self.d2h_stream.synchronize()
+                            self._cpu_grads_flat[
+                                self._tied_owner_offset:self._tied_owner_offset + self._tied_numel
+                            ].add_(self.tied_grad_accum)
+
+                            for cs in range(0, self.total_size, chunk):
+                                ce = min(cs + chunk, self.total_size)
+                                self._d2h_chunk_queue.put((cs, ce, None))
+                            self._d2h_chunk_queue.put(None)
+                        else:
+                            # Queue each chunk with a ready_event before Adam consumes it.
+                            for cs in range(0, self.total_size, chunk):
+                                ce = min(cs + chunk, self.total_size)
+                                self._cpu_grads_flat[cs:ce].copy_(gpu_grad[cs:ce], non_blocking=True)
+                                ready_event = torch.cuda.Event()
+                                ready_event.record(self.d2h_stream)
+                                self._d2h_chunk_queue.put((cs, ce, ready_event))
+
+                            # output-layer tied grad offloading
+                            if self._is_tied_output:
+                                self.tied_grad_accum.copy_(
+                                    gpu_grad[self.total_size:self.total_size + self._tied_numel],
+                                    non_blocking=True,
+                                )
+
+                            # sentinel: tells _do_chunked_update that all chunks are done
+                            self._d2h_chunk_queue.put(None)
 
                     for name, param in self._managed_named_params:
                         param.data = self._param_views[name]
                         param.grad = None
-                    # tied_param for OUTPUT
+                    # Restore the shared tied Parameter to the owner's CPU view.
                     if self._is_tied_output:
                         self.tied_param.data = self._tied_cpu_view
                         self.tied_param.grad = None
 
-                # self.d2h_ready.record(self.d2h_stream)   
+                self._current_gpu_cache["reuse_ready"].record(self.d2h_stream)
+                # self.d2h_ready.record(self.d2h_stream)
                 self.gpu_cache_queue.put(self._current_gpu_cache)
                 self._current_gpu_cache = None
-                
+
                 # print(f"Layer {self.layer_idx} d2h transfer finished.")
                 if self.enable_timing and start is not None:
                     duration = time.perf_counter() - start
                     self.timer.record_time("d2h_transfer_bw" if is_bwd else "d2h_transfer_fw", duration)
-                    
+
             nvtx.range_pop()
 
         # 使用D2H专用线程池
         self._d2h_future = self.d2h_executor.submit(_d2h_task)
-    
+
+
     def wait_for_d2h(self):
         """等待CPU卸载完成"""
         # print(f"Waiting for layer {self.layer_idx} d2h transfer...")
@@ -407,40 +474,72 @@ class OffloadLayerWrapper(nn.Module):
         #     self.d2h_ready.wait()
 
     def _do_update(self):
-        """执行参数更新"""
+        """执行参数更新 (monolithic fallback, used when D2H is monolithic)"""
         self.wait_for_d2h()
-        # self.d2h_ready.synchronize()
         nvtx.range_push(f"Update_Layer_{self.layer_idx}")
         with self.update_lock:
-            # print(f"Layer {self.layer_idx} update begin...")
             start = time.perf_counter() if self.enable_timing else None
-            
-            # Wait for a bubble for better performance
-            # time.sleep(10 / 1000)  # change left for milliseconds value
-            
+
             if self.layer_optimizer is not None:
-                # 使用共享优化器更新特定层
-                # self.layer_optimizer.step(self.layer_idx)
                 self.layer_optimizer.step_with_grad_views(self.layer_idx, self._param_to_grad_views)
             else:
-                # 使用独立优化器
                 self.optimizer.step()
-            
-            # self._cpu_params_flat_bf16.copy_(self._cpu_params_flat)
 
             if self.enable_timing and start is not None:
                 self.timer.record_time("parameter_update", time.perf_counter() - start)
-                
-            # print(f"Layer {self.layer_idx} update finished.")
+
             self.update_finished.set()
         nvtx.range_pop()
-        return True 
+        return True
+
+    def _do_chunked_update(self):
+        """Consume D2H-ready chunks as they land and run chunked Adam."""
+        nvtx.range_push(f"Update_Layer_{self.layer_idx}")
+        with self.update_lock:
+            start = None  # set when first chunk arrives
+
+            if self.layer_optimizer is not None:
+                param_group = self.layer_optimizer.begin_chunk_step(self.layer_idx)
+                while True:
+                    item = self._d2h_chunk_queue.get()
+                    if item is None:
+                        break
+                    if start is None and self.enable_timing:
+                        start = time.perf_counter()
+                    cs, ce, ready_event = item
+                    if ready_event is not None:
+                        ready_event.synchronize()
+                    self.layer_optimizer.step_chunk(
+                        self._cpu_params_flat[cs:ce],
+                        self._cpu_grads_flat[cs:ce],
+                        self.layer_optimizer.exp_avg_flat[self.layer_idx][cs:ce],
+                        self.layer_optimizer.exp_avg_sq_flat[self.layer_idx][cs:ce],
+                        param_group,
+                    )
+                self.layer_optimizer.end_chunk_step(self.layer_idx)
+            else:
+                # Fallback: wait for all chunks then run full optimizer step
+                while True:
+                    item = self._d2h_chunk_queue.get()
+                    if item is None:
+                        break
+                    if start is None and self.enable_timing:
+                        start = time.perf_counter()
+                self.optimizer.step()
+
+            if start is not None:
+                self.timer.record_time("parameter_update", time.perf_counter() - start)
+
+            self.update_finished.set()
+        nvtx.range_pop()
+        return True
 
     def update_params(self):
         """异步更新参数"""
         self.update_finished.clear()
-        future = self.update_executor.submit(self._do_update)
+        future = self.update_executor.submit(self._do_chunked_update)
         return future
+
 
     def wait_for_update(self):
         """等待参数更新完成"""
@@ -461,31 +560,58 @@ class DecoderWrapper(OffloadLayerWrapper):
         self.layer_nvme_paths = kwargs.pop('layer_nvme_paths', None)
         super().__init__(*args, **kwargs)
     
-    def forward(self, hidden_states, attention_mask=None, position_embeddings=None):
+    def forward(
+        self,
+        hidden_states,
+        attention_mask=None,
+        position_ids=None,
+        cache_position=None,
+        position_embeddings=None,
+    ):
         """Decoder层的前向传播实现"""
         nvtx.range_push(f"Forward_Layer_{self.layer_idx}")
         # self.compute_stream.wait_event(self.h2d_ready)
         with torch.cuda.stream(self.compute_stream):
             # self.wait_for_h2d()
             start = time.perf_counter() if self.enable_timing else None
-            # self.h2d_ready.synchronize()
-            def _forward(hidden_states, attention_mask, position_embeddings):
-                 return self.layer(
-                     hidden_states,
-                     attention_mask=attention_mask,
-                     position_embeddings=position_embeddings,
-                     output_attentions=False,
-                     use_cache=False
-                 )[0]    
+
+            def _forward(hidden_states):
+                output = self.layer(
+                    hidden_states,
+                    attention_mask=attention_mask,
+                    position_ids=position_ids,
+                    cache_position=cache_position,
+                    position_embeddings=position_embeddings,
+                    output_attentions=False,
+                )
+                return output[0] if isinstance(output, tuple) else output
             
             # 使用SlidingCheckpoint
             if self.ac_offload_nvme:
-                with SlidingCheckpoint(self.layer_idx, None, True, self.layer_nvme_paths, self.is_last_layer, attention_mask is None, self.device):
-                    output = checkpoint(_forward, hidden_states, attention_mask, position_embeddings, use_reentrant=False)
+                with SlidingCheckpoint(
+                    layer_idx=self.layer_idx,
+                    layer_tensors=None,
+                    gds_offload=True,
+                    file_paths=self.layer_nvme_paths,
+                    is_last_layer=self.is_last_layer,
+                    device=self.device,
+                    timing_recorder=self.timer,
+                    enable_timing=self.enable_timing,
+                ):
+                    output = checkpoint(_forward, hidden_states, use_reentrant=False)
             else:
-                with SlidingCheckpoint(self.layer_idx, self.layer_cpu_tensors, False, None, self.is_last_layer, attention_mask is None, self.device):
+                with SlidingCheckpoint(
+                    layer_idx=self.layer_idx,
+                    layer_tensors=self.layer_cpu_tensors,
+                    gds_offload=False,
+                    file_paths=None,
+                    is_last_layer=self.is_last_layer,
+                    device=self.device,
+                    timing_recorder=self.timer,
+                    enable_timing=self.enable_timing,
+                ):
                 # with save_on_cpu(pin_memory=True):
-                    output = checkpoint(_forward, hidden_states, attention_mask, position_embeddings, use_reentrant=False)
+                    output = checkpoint(_forward, hidden_states, use_reentrant=False)
             
             self.compute_ready.record(self.compute_stream)
             
@@ -519,14 +645,12 @@ class OutputWrapper(OffloadLayerWrapper):
         super().__init__(layer=combined_layer, *args, **kwargs)
         self.norm_layer = norm_layer
         self.lm_head = lm_head
-        # Use Liger fused kernel when available; otherwise fall back to PyTorch CE.
-        self.lce = (
-            LigerFusedLinearCrossEntropyLoss(reduction="mean")
-            if LigerFusedLinearCrossEntropyLoss is not None
-            else None
-        )
+        # The vendored legacy FLCE path is still the fastest choice for large vocab.
+        # from liger_kernel.transformers.fused_linear_cross_entropy import LigerFusedLinearCrossEntropyLoss
+        # self.lce = LigerFusedLinearCrossEntropyLoss(reduction="mean", accum_dtype=torch.float32)
+        self.lce = LegacyFusedLinearCrossEntropyLoss(reduction="mean")
     
-    def forward(self, hidden_states, labels, hidden_size):
+    def forward(self, hidden_states, labels=None):
         nvtx.range_push(f"Forward_Layer_{self.layer_idx}")
         # self.compute_stream.wait_event(self.h2d_ready)
         with torch.cuda.stream(self.compute_stream):
@@ -535,35 +659,33 @@ class OutputWrapper(OffloadLayerWrapper):
             start = time.perf_counter() if self.enable_timing else None
             
             hidden_states = self.norm_layer(hidden_states)
-            
-            shift_hidden_states = hidden_states[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
 
-            # flatten tokens
-            shift_hidden_states = shift_hidden_states.view(-1, hidden_size)
-            shift_labels = shift_labels.view(-1)
-            
-            if self.lce is not None:
-                loss = self.lce(
+            if labels is None:
+                output = self.lm_head(hidden_states)
+            else:
+                shift_hidden_states = hidden_states[..., :-1, :].contiguous()
+                shift_labels = labels[..., 1:].contiguous()
+
+                # flatten tokens
+                shift_hidden_states = shift_hidden_states.view(-1, shift_hidden_states.size(-1))
+                shift_labels = shift_labels.view(-1)
+
+                output = self.lce(
                     self.lm_head.weight,
                     shift_hidden_states,
-                    shift_labels,
+                    shift_labels
                 )
-            else:
-                logits = F.linear(shift_hidden_states, self.lm_head.weight)
-                loss = F.cross_entropy(logits, shift_labels, ignore_index=-100, reduction="mean")
                 
             # output = self.layer(hidden_states)
             
-            self.compute_ready.record()
+            self.compute_ready.record(self.compute_stream)
             
             if self.enable_timing and start is not None:
                 duration = time.perf_counter() - start
                 self.timer.record_time("forward", duration)
             nvtx.range_pop()
-            return loss
+            return output
         
-    # Ablation
     # def forward(self, hidden_states):
     #     nvtx.range_push(f"Forward_Layer_{self.layer_idx}")
     #     with torch.cuda.stream(self.compute_stream):

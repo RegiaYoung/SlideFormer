@@ -1,0 +1,48 @@
+# Qwen 3-Next 80B-A3B Model Configuration (Hybrid Attention + MoE)
+#
+# Architecture:
+#   - Hybrid token mixer: linear attention (GatedDeltaNet) + full attention
+#   - MoE: 80B total params, ~3B active per token
+#   - 512 experts, shared expert, top-K routing
+# MegaTrain handles this via:
+#   - Per-layer structure grouping (linear vs full attention templates)
+#   - Per-layer buffer sizing (MoE layers much larger than dense layers)
+#
+# Requires: transformers >= 5.0, significant CPU RAM (~640GB+)
+
+model:
+  name: "Qwen/Qwen3-Next-80B-A3B-Instruct"
+  dtype: "bfloat16"
+  device: 0
+  attn_implementation: "flash_attention_2"
+  trust_remote_code: true
+
+dataset:
+  path: "dataset/Math/train"
+  max_seq_len: 1024
+  num_workers: 2
+  query_field: "query"
+  response_field: "response"
+
+training:
+  batch_size: 16
+  gradient_accumulation_steps: 4
+  num_steps: 200
+  learning_rate: 5.0e-6
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  seed: 42
+
+optimizer:
+  type: "deepspeed_adam"
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-8
+
+memory:
+  checkpoint_interval: 2
+  num_grad_slabs: 8
+
+logging:
+  log_interval: 1
+  enable_timing: true

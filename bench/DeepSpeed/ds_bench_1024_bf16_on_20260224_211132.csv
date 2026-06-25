@@ -1,4 +1,0 @@
-Model,Sequence_Length,Batch_Size,Precision,Use_Liger,Zero_Stage,Offload,Offload_NVMe,Avg_Time,Avg_Tokens_Per_Second,Avg_TFLOPS,Max_Memory_MB,Max_CUDA_Memory_Allocated_MB,Max_CUDA_Memory_Reserved_MB
-Llama-3.1-8B-Instruct,1024,8,BF16,Yes,3,Yes,No,8.9672,913.6,42.61,176321.0,8508.6,23270.0
-Llama-3.1-8B-Instruct,1024,16,BF16,Yes,3,Yes,No,11.9340,1372.9,64.03,176341.3,10620.7,22382.0
-Llama-3.1-8B-Instruct,1024,32,BF16,Yes,3,Yes,No,18.2987,1790.9,83.53,176327.1,16367.4,23326.0

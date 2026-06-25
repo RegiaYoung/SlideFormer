@@ -68,12 +68,12 @@ def create_ds_config(args):
         "train_micro_batch_size_per_gpu": args.batch_size,
         "steps_per_print": 10,
         "optimizer": {
-            "type": "Adam",
+            "type": "AdamW",
             "params": {
                 "lr": args.lr,
                 "betas": [0.9, 0.999],
                 "eps": 1e-8,
-                "weight_decay": 0.01
+                "weight_decay": 0.1
             }
         },
         "fp16": {
@@ -91,11 +91,11 @@ def create_ds_config(args):
         }
     }
     
-    config["activation_checkpointing"] = {
-        "partition_activations": True,
-        "contiguous_memory_optimization": True,
-        "cpu_checkpointing": True,
-    }
+    # 注意: 不在此处配置 DeepSpeed 的 activation_checkpointing。
+    # DeepSpeed 的 activation_checkpointing 只有在模型代码显式调用
+    # deepspeed.checkpointing.checkpoint() 时才生效, 而本 benchmark 走的是
+    # HF 的 model.gradient_checkpointing_enable() (见下方模型加载处),
+    # 与 SlideFormer 的逐层 full activation checkpoint 对齐。
 
     # 设置ZeRO-Offload (CPU)
     if args.offload:
@@ -119,9 +119,11 @@ def create_ds_config(args):
             }
             
             # 优化ZeRO-3的内存使用
+            # 5e7 (而非 1e8/5e8): 限制 GPU 常驻参数与预取缓冲, 强制更激进 offload,
+            # 这是在 24GB 卡上跑 8B + bs32 (无梯度累积) 不 OOM 的关键, 与 OOM 仓库对齐。
             config["zero_optimization"]["stage3_param_persistence_threshold"] = 0
-            config["zero_optimization"]["stage3_max_live_parameters"] = 1e8
-            config["zero_optimization"]["stage3_prefetch_bucket_size"] = 5e8
+            config["zero_optimization"]["stage3_max_live_parameters"] = 5e7
+            config["zero_optimization"]["stage3_prefetch_bucket_size"] = 5e7
 
     # 设置ZeRO-Infinity (NVMe)
     if args.offload_nvme:

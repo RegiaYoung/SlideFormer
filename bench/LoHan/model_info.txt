@@ -1,0 +1,1018 @@
+---------------------SB_init BEGIN INIT---------------------
+---------------------SB_init ENTER---------------------
+Module Embedding
+id : 0                    | name : weight               | size : (50257, 5120)        | count : 257315840 
+Module Embedding
+id : 1                    | name : weight               | size : (1024, 5120)         | count : 5242880   
+Module Dropout
+Module ModuleList
+Module LayerNorm
+id : 2                    | name : weight               | size : (5120,)              | count : 5120      
+id : 3                    | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 4                    | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 5                    | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 6                    | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 7                    | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 8                    | name : weight               | size : (5120,)              | count : 5120      
+id : 9                    | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 10                   | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 11                   | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 12                   | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 13                   | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 14                   | name : weight               | size : (5120,)              | count : 5120      
+id : 15                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 16                   | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 17                   | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 18                   | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 19                   | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 20                   | name : weight               | size : (5120,)              | count : 5120      
+id : 21                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 22                   | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 23                   | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 24                   | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 25                   | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 26                   | name : weight               | size : (5120,)              | count : 5120      
+id : 27                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 28                   | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 29                   | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 30                   | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 31                   | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 32                   | name : weight               | size : (5120,)              | count : 5120      
+id : 33                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 34                   | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 35                   | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 36                   | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 37                   | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 38                   | name : weight               | size : (5120,)              | count : 5120      
+id : 39                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 40                   | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 41                   | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 42                   | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 43                   | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 44                   | name : weight               | size : (5120,)              | count : 5120      
+id : 45                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 46                   | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 47                   | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 48                   | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 49                   | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 50                   | name : weight               | size : (5120,)              | count : 5120      
+id : 51                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 52                   | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 53                   | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 54                   | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 55                   | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 56                   | name : weight               | size : (5120,)              | count : 5120      
+id : 57                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 58                   | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 59                   | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 60                   | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 61                   | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 62                   | name : weight               | size : (5120,)              | count : 5120      
+id : 63                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 64                   | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 65                   | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 66                   | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 67                   | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 68                   | name : weight               | size : (5120,)              | count : 5120      
+id : 69                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 70                   | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 71                   | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 72                   | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 73                   | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 74                   | name : weight               | size : (5120,)              | count : 5120      
+id : 75                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 76                   | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 77                   | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 78                   | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 79                   | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 80                   | name : weight               | size : (5120,)              | count : 5120      
+id : 81                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 82                   | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 83                   | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 84                   | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 85                   | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 86                   | name : weight               | size : (5120,)              | count : 5120      
+id : 87                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 88                   | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 89                   | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 90                   | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 91                   | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 92                   | name : weight               | size : (5120,)              | count : 5120      
+id : 93                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 94                   | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 95                   | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 96                   | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 97                   | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 98                   | name : weight               | size : (5120,)              | count : 5120      
+id : 99                   | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 100                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 101                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 102                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 103                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 104                  | name : weight               | size : (5120,)              | count : 5120      
+id : 105                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 106                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 107                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 108                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 109                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 110                  | name : weight               | size : (5120,)              | count : 5120      
+id : 111                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 112                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 113                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 114                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 115                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 116                  | name : weight               | size : (5120,)              | count : 5120      
+id : 117                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 118                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 119                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 120                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 121                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 122                  | name : weight               | size : (5120,)              | count : 5120      
+id : 123                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 124                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 125                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 126                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 127                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 128                  | name : weight               | size : (5120,)              | count : 5120      
+id : 129                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 130                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 131                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 132                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 133                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 134                  | name : weight               | size : (5120,)              | count : 5120      
+id : 135                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 136                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 137                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 138                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 139                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 140                  | name : weight               | size : (5120,)              | count : 5120      
+id : 141                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 142                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 143                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 144                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 145                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 146                  | name : weight               | size : (5120,)              | count : 5120      
+id : 147                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 148                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 149                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 150                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 151                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 152                  | name : weight               | size : (5120,)              | count : 5120      
+id : 153                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 154                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 155                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 156                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 157                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 158                  | name : weight               | size : (5120,)              | count : 5120      
+id : 159                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 160                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 161                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 162                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 163                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 164                  | name : weight               | size : (5120,)              | count : 5120      
+id : 165                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 166                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 167                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 168                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 169                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 170                  | name : weight               | size : (5120,)              | count : 5120      
+id : 171                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 172                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 173                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 174                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 175                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 176                  | name : weight               | size : (5120,)              | count : 5120      
+id : 177                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 178                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 179                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 180                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 181                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 182                  | name : weight               | size : (5120,)              | count : 5120      
+id : 183                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 184                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 185                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 186                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 187                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 188                  | name : weight               | size : (5120,)              | count : 5120      
+id : 189                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 190                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 191                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 192                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 193                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 194                  | name : weight               | size : (5120,)              | count : 5120      
+id : 195                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 196                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 197                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 198                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 199                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 200                  | name : weight               | size : (5120,)              | count : 5120      
+id : 201                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 202                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 203                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 204                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 205                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 206                  | name : weight               | size : (5120,)              | count : 5120      
+id : 207                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 208                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 209                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 210                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 211                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 212                  | name : weight               | size : (5120,)              | count : 5120      
+id : 213                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 214                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 215                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 216                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 217                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 218                  | name : weight               | size : (5120,)              | count : 5120      
+id : 219                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 220                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 221                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 222                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 223                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 224                  | name : weight               | size : (5120,)              | count : 5120      
+id : 225                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 226                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 227                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 228                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 229                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 230                  | name : weight               | size : (5120,)              | count : 5120      
+id : 231                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 232                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 233                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 234                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 235                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 236                  | name : weight               | size : (5120,)              | count : 5120      
+id : 237                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 238                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 239                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 240                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 241                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 242                  | name : weight               | size : (5120,)              | count : 5120      
+id : 243                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 244                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 245                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 246                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 247                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 248                  | name : weight               | size : (5120,)              | count : 5120      
+id : 249                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 250                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 251                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 252                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 253                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 254                  | name : weight               | size : (5120,)              | count : 5120      
+id : 255                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 256                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 257                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 258                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 259                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 260                  | name : weight               | size : (5120,)              | count : 5120      
+id : 261                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 262                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 263                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 264                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 265                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 266                  | name : weight               | size : (5120,)              | count : 5120      
+id : 267                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 268                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 269                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 270                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 271                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 272                  | name : weight               | size : (5120,)              | count : 5120      
+id : 273                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 274                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 275                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 276                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 277                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 278                  | name : weight               | size : (5120,)              | count : 5120      
+id : 279                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 280                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 281                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 282                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 283                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 284                  | name : weight               | size : (5120,)              | count : 5120      
+id : 285                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 286                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 287                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 288                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 289                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 290                  | name : weight               | size : (5120,)              | count : 5120      
+id : 291                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 292                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 293                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 294                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 295                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 296                  | name : weight               | size : (5120,)              | count : 5120      
+id : 297                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 298                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 299                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 300                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 301                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 302                  | name : weight               | size : (5120,)              | count : 5120      
+id : 303                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 304                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 305                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 306                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 307                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 308                  | name : weight               | size : (5120,)              | count : 5120      
+id : 309                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 310                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 311                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 312                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 313                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 314                  | name : weight               | size : (5120,)              | count : 5120      
+id : 315                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 316                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 317                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 318                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 319                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 320                  | name : weight               | size : (5120,)              | count : 5120      
+id : 321                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 322                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 323                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 324                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 325                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 326                  | name : weight               | size : (5120,)              | count : 5120      
+id : 327                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 328                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 329                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 330                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 331                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 332                  | name : weight               | size : (5120,)              | count : 5120      
+id : 333                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 334                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 335                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 336                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 337                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 338                  | name : weight               | size : (5120,)              | count : 5120      
+id : 339                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 340                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 341                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 342                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 343                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 344                  | name : weight               | size : (5120,)              | count : 5120      
+id : 345                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 346                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 347                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 348                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 349                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 350                  | name : weight               | size : (5120,)              | count : 5120      
+id : 351                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 352                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 353                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 354                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 355                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 356                  | name : weight               | size : (5120,)              | count : 5120      
+id : 357                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 358                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 359                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 360                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 361                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 362                  | name : weight               | size : (5120,)              | count : 5120      
+id : 363                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 364                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 365                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 366                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 367                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 368                  | name : weight               | size : (5120,)              | count : 5120      
+id : 369                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 370                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 371                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 372                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 373                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 374                  | name : weight               | size : (5120,)              | count : 5120      
+id : 375                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 376                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 377                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 378                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 379                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 380                  | name : weight               | size : (5120,)              | count : 5120      
+id : 381                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 382                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 383                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 384                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 385                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 386                  | name : weight               | size : (5120,)              | count : 5120      
+id : 387                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 388                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 389                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 390                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 391                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 392                  | name : weight               | size : (5120,)              | count : 5120      
+id : 393                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 394                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 395                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 396                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 397                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 398                  | name : weight               | size : (5120,)              | count : 5120      
+id : 399                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 400                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 401                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 402                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 403                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 404                  | name : weight               | size : (5120,)              | count : 5120      
+id : 405                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 406                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 407                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 408                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 409                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 410                  | name : weight               | size : (5120,)              | count : 5120      
+id : 411                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 412                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 413                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 414                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 415                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 416                  | name : weight               | size : (5120,)              | count : 5120      
+id : 417                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 418                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 419                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 420                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 421                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 422                  | name : weight               | size : (5120,)              | count : 5120      
+id : 423                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 424                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 425                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 426                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 427                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 428                  | name : weight               | size : (5120,)              | count : 5120      
+id : 429                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 430                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 431                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 432                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 433                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 434                  | name : weight               | size : (5120,)              | count : 5120      
+id : 435                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 436                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 437                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 438                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 439                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 440                  | name : weight               | size : (5120,)              | count : 5120      
+id : 441                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 442                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 443                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 444                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 445                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 446                  | name : weight               | size : (5120,)              | count : 5120      
+id : 447                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 448                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 449                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 450                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 451                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 452                  | name : weight               | size : (5120,)              | count : 5120      
+id : 453                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 454                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 455                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 456                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 457                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 458                  | name : weight               | size : (5120,)              | count : 5120      
+id : 459                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 460                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 461                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 462                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 463                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 464                  | name : weight               | size : (5120,)              | count : 5120      
+id : 465                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 466                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 467                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 468                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 469                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 470                  | name : weight               | size : (5120,)              | count : 5120      
+id : 471                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 472                  | name : weight               | size : (15360, 5120)        | count : 78643200  
+id : 473                  | name : bias                 | size : (15360,)             | count : 15360     
+Module Linear
+id : 474                  | name : weight               | size : (5120, 5120)         | count : 26214400  
+id : 475                  | name : bias                 | size : (5120,)              | count : 5120      
+Module FlashAttention
+Module Dropout
+Module GPT2Attention
+Module LayerNorm
+id : 476                  | name : weight               | size : (5120,)              | count : 5120      
+id : 477                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 478                  | name : weight               | size : (20480, 5120)        | count : 104857600 
+id : 479                  | name : bias                 | size : (20480,)             | count : 20480     
+Module Linear
+id : 480                  | name : weight               | size : (5120, 20480)        | count : 104857600 
+id : 481                  | name : bias                 | size : (5120,)              | count : 5120      
+Module GELU
+Module Dropout
+Module GPT2MLP
+Module GPT2Block
+Module LayerNorm
+id : 482                  | name : weight               | size : (5120,)              | count : 5120      
+id : 483                  | name : bias                 | size : (5120,)              | count : 5120      
+Module Linear
+id : 484                  | name : weight               | size : (50257, 5120)        | count : 257315840 
+id : 485                  | name : bias                 | size : (50257,)             | count : 50257     
+Module GPT2Model
+
+Model Param count : 13105509457
+---------------------SB_init EXIT---------------------

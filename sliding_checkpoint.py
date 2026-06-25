@@ -1,3 +1,6 @@
+# Copyright 2025-2026 The SlideFormer Authors
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torch.autograd.graph import saved_tensors_hooks
 from collections import deque, OrderedDict
@@ -8,38 +11,87 @@ fifo_prefetch_queue = deque()
 cp_stream = torch.cuda.Stream()
 write_events = OrderedDict()
 
+# ---- Activation prefetch GPU buffer pool ----
+# Round-robin pre-allocated GPU buffers avoid allocator work during backward.
+_ac_gpu_buffers: Optional[List[List[torch.Tensor]]] = None
+_ac_buffer_idx: int = 0
+
+
+def init_ac_gpu_prefetch_pool(
+    template_cpu_tensors: List[torch.Tensor],
+    device: torch.device,
+    pool_size: int = 2,
+) -> None:
+    """Pre-allocate GPU buffers matching the activation shapes.
+
+    Args:
+        template_cpu_tensors: One layer's list of CPU activation tensors
+                              whose shapes / dtypes are used as templates.
+        device: Target GPU device.
+        pool_size: Number of buffer sets (2 is sufficient for the pipeline).
+    """
+    global _ac_gpu_buffers, _ac_buffer_idx
+    _ac_gpu_buffers = [
+        [torch.empty(t.shape, dtype=t.dtype, device=device) for t in template_cpu_tensors]
+        for _ in range(pool_size)
+    ]
+    _ac_buffer_idx = 0
+    print(f"[AC Pool] Initialized {pool_size} GPU prefetch buffer sets on {device}")
+
+
+def _get_next_prefetch_buffers(fallback_tensors, device):
+    """Return the next pre-allocated GPU buffer set (round-robin).
+
+    Falls back to dynamic allocation when the pool is not initialised
+    (e.g. first step before shapes are known).
+    """
+    global _ac_buffer_idx
+    if _ac_gpu_buffers is not None:
+        bufs = _ac_gpu_buffers[_ac_buffer_idx % len(_ac_gpu_buffers)]
+        _ac_buffer_idx += 1
+        return bufs
+    if fallback_tensors is not None:
+        return [torch.empty_like(t, device=device) for t in fallback_tensors]
+    return None
+
 class SlidingCheckpoint(saved_tensors_hooks):
     """基于save_on_cpu实现的transformer层tensor管理机制，使用单一checkpoint模式"""
     def __init__(
         self,
-        layer_idx: int,  # 当前层索引
-        layer_tensors: List[List[torch.Tensor]] = None,  # 所有层的预分配CPU tensors
+        layer_idx: int,  # 当前decoder层索引
+        layer_tensors: List[List[torch.Tensor]] = None,  # 所有层的预分配CPU hidden_state tensors
         gds_offload: bool = False,
         file_paths: List[List[str]] = None,
         is_last_layer: bool = False,  # 是否是最后一层
-        no_mask: bool = False,
         device: str = 'cuda:0',
         pin_memory: bool = True,
         stream: Optional[torch.cuda.Stream] = None,
+        timing_recorder: Any = None,
+        enable_timing: bool = False,
     ):
         self.layer_idx = layer_idx - 1
         self.device = device
         self.stream = stream or cp_stream
         self.is_last_layer = is_last_layer
-        self.no_mask = no_mask 
         self.gds_offload = gds_offload
+        self.timing_recorder = timing_recorder
+        self.enable_timing = bool(
+            enable_timing and timing_recorder is not None and not gds_offload
+        )
+        self._fwd_d2h_start_event = None
         
         # 根据模式初始化存储资源
         if gds_offload:
             assert file_paths is not None, "必须提供file_paths当启用GPU Direct Storage时"
             import kvikio
             self.file_paths = file_paths
+            self._gds_prefetch_bufs = None
             
         else:
             assert layer_tensors is not None, "必须提供layer_tensors当使用CPU内存时"
             self.layer_tensors = layer_tensors
         
-        # tensor计数器(用于pack和unpack)
+        # tensor计数器(用于pack和unpack). 零大小占位tensor不会计数。
         self.pack_counter = 0
         self.unpack_counter = 0
         
@@ -69,6 +121,9 @@ class SlidingCheckpoint(saved_tensors_hooks):
             with torch.cuda.stream(self.stream):
                 if self.pack_counter == 0:
                     self.stream.wait_event(self.pre_pack_event)
+                    if self.enable_timing:
+                        self._fwd_d2h_start_event = torch.cuda.Event(enable_timing=True)
+                        self._fwd_d2h_start_event.record(self.stream)
                     # self.pre_pack_event.synchronize()
                 cpu_tensor.copy_(tensor, non_blocking=True)
                 
@@ -79,30 +134,35 @@ class SlidingCheckpoint(saved_tensors_hooks):
         def _cpu_unpack_hook(packed: Tuple[torch.device, Any]) -> torch.Tensor:
             """从CPU解包tensor,在适当时机预取下一层"""
             device, tensor = packed
-            
+
             if tensor.size() == torch.Size([0]) or not pin_memory:
-                # device, tensor = packed
                 return tensor.to(device, non_blocking=pin_memory)
             
-            # 在解包第一个tensor时触发预取下一层
+            # 在解包第一个真实tensor时触发预取下一层
             if self.unpack_counter == 0:
-                
-                # torch.cuda.default_stream().synchronize()
                 self.pre_unpack_event.record(stream=torch.cuda.default_stream())
                 
-                # 预取下一层的两个tensor
                 next_layer_idx = self.layer_idx - 1
                 if next_layer_idx >= 0:
-                    # 预取下一层的两个tensor
                     next_tensors = self.layer_tensors[next_layer_idx]
+                    temp_prefetch_buffers = _get_next_prefetch_buffers(next_tensors, self.device)
                     
-                    temp_prefetch_buffers =[torch.empty_like(t, device = self.device) for t in next_tensors] # 注意此处device
-                    
-                    # 异步预取下一层的所有tensor
+                    # 异步预取下一层保存的activation tensors
                     with torch.cuda.stream(self.stream):
                         self.stream.wait_event(self.pre_unpack_event)
+                        if self.enable_timing:
+                            ac_prefetch_start = torch.cuda.Event(enable_timing=True)
+                            ac_prefetch_start.record(self.stream)
                         for cpu_tensor, gpu_buffer in zip(next_tensors, temp_prefetch_buffers):
                             gpu_buffer.copy_(cpu_tensor, non_blocking=True)
+                        if self.enable_timing:
+                            ac_prefetch_end = torch.cuda.Event(enable_timing=True)
+                            ac_prefetch_end.record(self.stream)
+                            self.timing_recorder.record_cuda_span(
+                                "ac_bwd_h2d",
+                                ac_prefetch_start,
+                                ac_prefetch_end,
+                            )
                         self.post_unpack_event_prefetch.record(stream=self.stream)
                          
                     fifo_prefetch_queue.append((temp_prefetch_buffers, self.post_unpack_event_prefetch))
@@ -118,17 +178,13 @@ class SlidingCheckpoint(saved_tensors_hooks):
                 
                 next_tensors, unpack_event_prefetch = fifo_prefetch_queue[0]
                 if self.unpack_counter == 0:
-                    # unpack_event_prefetch.synchronize()
-                    # 让当前GPU流（计算流）等待预取流完成，而不是阻塞CPU
                     current_stream = torch.cuda.current_stream()
                     current_stream.wait_event(unpack_event_prefetch)
                 
-                # 根据顺序决定使用哪个预取的tensor
                 result = next_tensors[self.unpack_counter]
 
-                # 使用完所有tensor后移除这组预取结果
                 self.unpack_counter += 1
-                if self.no_mask or self.unpack_counter == self.pack_counter:  # 两个tensor都已经unpacked
+                if self.unpack_counter == self.pack_counter:
                     fifo_prefetch_queue.popleft()
                     
             return result
@@ -172,19 +228,19 @@ class SlidingCheckpoint(saved_tensors_hooks):
 
             next_layer_idx = self.layer_idx - 1
             if next_layer_idx >= 0:
-                # 预取下一层的两个tensor
-                # print(next_layer_idx, self.unpack_counter)
                 next_layer_path = self.file_paths[next_layer_idx][self.unpack_counter]
-                # print(f"Prefetching file: {next_layer_path}")
-                # 创建GPU缓冲区
                 write_events[next_layer_idx][self.unpack_counter].check_bytes_done()
                 
+                if self.unpack_counter == 0:
+                    self._gds_prefetch_bufs = _get_next_prefetch_buffers(None, self.device)
+
                 with kvikio.CuFile(next_layer_path, "r") as f:
                     self.stream.wait_event(self.pre_unpack_event)
-                    buffer = torch.empty(shape, dtype=dtype, device=self.device)
+                    if self._gds_prefetch_bufs is not None:
+                        buffer = self._gds_prefetch_bufs[self.unpack_counter]
+                    else:
+                        buffer = torch.empty(shape, dtype=dtype, device=self.device)
                     future = f.raw_read_async(buffer, self.stream.cuda_stream)
-                    # event = torch.cuda.Event()
-                    # event.record(stream=self.stream)
                     fifo_prefetch_queue.append((buffer, future))
 
             # 最后一层直接返回GPU张量
@@ -205,6 +261,23 @@ class SlidingCheckpoint(saved_tensors_hooks):
             return result
             
         super().__init__(_gds_pack_hook if self.gds_offload else _cpu_pack_hook, _gds_unpack_hook if self.gds_offload else _cpu_unpack_hook)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if (
+            self.enable_timing
+            and not self.is_last_layer
+            and self.pack_counter > 0
+            and self._fwd_d2h_start_event is not None
+        ):
+            with torch.cuda.stream(self.stream):
+                end_event = torch.cuda.Event(enable_timing=True)
+                end_event.record(self.stream)
+            self.timing_recorder.record_cuda_span(
+                "ac_fwd_d2h",
+                self._fwd_d2h_start_event,
+                end_event,
+            )
+        return super().__exit__(exc_type, exc_val, exc_tb)
 
 # 保留原有的save_on_cpu类实现
 class save_on_cpu(saved_tensors_hooks):
