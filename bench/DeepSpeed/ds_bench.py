@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from utils.metric import calculate_flops_per_batch
 from utils.log_mem import log_memory_stats
-from utils.datasets import DummyDataset
+from utils.datasets import DummyDataset, FullLengthDummyDataset
 from liger_kernel.transformers import AutoLigerKernelForCausalLM
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument("--model_path", type=str, default="/home/scc/models/Llama-3.1-8B-Instruct/", help="模型路径")
     parser.add_argument("--warm_step", type=int, default=3, help="预热步数")
     parser.add_argument("--test_step", type=int, default=10, help="测试步数")
+    parser.add_argument("--full_length_data", action="store_true", help="Use full-length non-padded dummy samples")
     parser.add_argument("--result_file", type=str, default="", help="结果CSV文件路径")
     parser.add_argument("--lr", type=float, default=1e-5, help="学习率")
     # DeepSpeed特定参数
@@ -238,6 +239,7 @@ def benchmark_model_ds(args):
     print(f"Model: {args.model_path}")
     print(f"Use Liger Kernel: {args.use_liger}")
     print(f"Seq_len: {args.seq_len}, batch_size: {args.batch_size}")
+    print(f"Full-length dummy data: {args.full_length_data}")
     print(f"DeepSpeed设置: ZeRO-{args.zero_stage}, Offload: {args.offload}, NVMe Offload: {args.offload_nvme}")
     print(f"Warm-up steps: {args.warm_step}, test steps: {args.test_step}")
 
@@ -280,7 +282,8 @@ def benchmark_model_ds(args):
         json.dump(ds_config, f, indent=4)
     
     # 4. 准备数据集
-    dataset = DummyDataset(
+    dataset_cls = FullLengthDummyDataset if args.full_length_data else DummyDataset
+    dataset = dataset_cls(
         size=(args.warm_step + args.test_step) * args.batch_size,
         tokenizer=tokenizer,
         max_length=args.seq_len

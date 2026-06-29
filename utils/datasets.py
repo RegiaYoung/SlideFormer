@@ -164,3 +164,27 @@ class DummyDataset(Dataset):
             'attention_mask': attention_mask,
             'labels': labels
         }
+
+
+class FullLengthDummyDataset(Dataset):
+    def __init__(self, size=1000, tokenizer=None, max_length=512):
+        self.size = size
+        self.max_length = max_length
+        self.vocab_size = 32000
+        if tokenizer is not None:
+            self.vocab_size = tokenizer.vocab_size
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, idx):
+        input_ids = torch.randint(1, self.vocab_size, (self.max_length,))
+        attention_mask = torch.ones(self.max_length, dtype=torch.bool)
+        labels = input_ids.clone()
+        labels[0] = -100
+
+        return {
+            'input_ids': input_ids,
+            'attention_mask': attention_mask,
+            'labels': labels
+        }

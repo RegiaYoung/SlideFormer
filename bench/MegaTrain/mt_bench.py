@@ -53,7 +53,7 @@ from liger_kernel.transformers import AutoLigerKernelForCausalLM
 # Shared dummy dataset — identical random fixed-length samples to the DeepSpeed
 # baseline (utils.datasets.DummyDataset), so all frameworks train on the same
 # token distribution and sequence length.
-from utils.datasets import DummyDataset
+from utils.datasets import DummyDataset, FullLengthDummyDataset
 
 try:
     from deepspeed.ops.adam import DeepSpeedCPUAdam
@@ -86,6 +86,8 @@ def parse_args():
     parser.add_argument("--attn_implementation", type=str,
                         default="flash_attention_2",
                         choices=["flash_attention_2", "sdpa"])
+    parser.add_argument("--full_length_data", action="store_true",
+                        help="Use full-length non-padded dummy samples")
     # MegaTrain memory knobs (its equivalent of activation checkpointing).
     parser.add_argument("--checkpoint_interval", type=int, default=4,
                         help="MegaTrain activation checkpoint interval (layers)")
@@ -121,6 +123,7 @@ def main():
     print(f"===== MegaTrain bench: {model_name} | seq={args.seq_len} "
           f"bs={args.batch_size} {precision} | liger={'on' if args.use_liger else 'off'} =====")
     print(f"Warm-up steps: {args.warm_step}, test steps: {args.test_step}")
+    print(f"Full-length dummy data: {args.full_length_data}")
     if not CPU_ADAM_AVAILABLE:
         print("WARNING: DeepSpeedCPUAdam unavailable, falling back to torch AdamW "
               "(CPU). Optimizer placement still on CPU, but not SIMD-accelerated.")
@@ -181,7 +184,8 @@ def main():
 
     # --- dataset (shared DummyDataset, identical to the DeepSpeed baseline) --
     from torch.utils.data import DataLoader
-    dataset = DummyDataset(
+    dataset_cls = FullLengthDummyDataset if args.full_length_data else DummyDataset
+    dataset = dataset_cls(
         size=(args.warm_step + args.test_step) * args.batch_size,
         tokenizer=tokenizer,
         max_length=args.seq_len,

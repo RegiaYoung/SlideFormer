@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use SlideFormer, please cite the software and the associated DAC 2026 paper."
+message: "If you use SlideFormer, please cite the software and the associated arXiv preprint."
 title: "SlideFormer"
 type: software
 authors:
@@ -22,7 +22,7 @@ keywords:
   - "single-GPU training"
   - "CPU offload"
 preferred-citation:
-  type: conference-paper
+  type: article
   title: "An Efficient Heterogeneous Co-Design for Fine-Tuning on a Single GPU"
   authors:
     - family-names: "Yang"
@@ -30,9 +30,4 @@ preferred-citation:
     - family-names: "Wen"
       given-names: "Zeyi"
   year: 2026
-  doi: "10.1145/3770743.3804125"
   url: "https://arxiv.org/abs/2603.16428"
-  conference:
-    name: "63rd ACM/IEEE Design Automation Conference"
-  publisher:
-    name: "ACM"

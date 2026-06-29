@@ -198,6 +198,20 @@ MegaTrain comparison alongside the paper baselines.
   </tr>
 </table>
 
+<p align="center">
+  <img src="bench/figure/figure11_long_context_scaling.png" alt="Sequence-length scaling and maximum trainable context" width="80%"><br>
+  <sub><b>(d)</b> Long-context training on RTX 4090. Left: sequence-length scaling for Llama-3.1-8B at batch size 1. Right: maximum trainable sequence length for Qwen3 models at batch size 1; labels above bars report TFLOPS at the corresponding maximum.
+</sub>
+</p>
+
+With the flash attention used here, activation-related memory scales
+approximately with `batch_size * seq_len`. For example, SlideFormer shows nearly
+identical CPU and allocated GPU memory at `bs=64, seq=1K` and
+`bs=1, seq=64K`. Compute scales differently: self-attention costs
+`O(B * S^2)`, so increasing sequence length adds substantially more attention
+work even at a fixed token budget and makes training more compute-intensive.
+Long-context TFLOPS can consequently exceed the **1K no-offload peak**, which is
+a workload-specific reference rather than a hardware peak.
 
 > **Note:** For fairness, all evaluated systems use the same workload
 > and enable the same fused kernels unless a framework already provides an

@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from utils.metric import calculate_flops_per_batch
 # from utils.log_mem import log_memory_stats
-from utils.datasets import DummyDataset
+from utils.datasets import DummyDataset, FullLengthDummyDataset
 from utils.gpu_monitor import GPUMonitor
 from offload_transformer import SlideFormerOffloader
 
@@ -42,6 +42,7 @@ def parse_args():
     parser.add_argument("--model_path", type=str, default="/home/scc/models/Llama-3.1-8B-Instruct/", help="模型路径或HuggingFace模型ID")
     parser.add_argument("--warm_step", type=int, default=3, help="预热步数")
     parser.add_argument("--test_step", type=int, default=10, help="测试步数")
+    parser.add_argument("--full_length_data", action="store_true", help="Use full-length non-padded dummy samples")
     parser.add_argument("--result_file", type=str, default="", help="结果CSV文件路径（可选）")
     return parser.parse_args()
 
@@ -104,6 +105,7 @@ def benchmark_model(
     ac_offload_nvme=False,
     nvme_offload_fraction=0.0,
     offload_dir="./offload_dir",
+    full_length_data=False,
     result_file=None
 ):
     # 在开始前强制清理 GPU 内存
@@ -124,6 +126,7 @@ def benchmark_model(
     print(f"NVME Offload Fraction: {nvme_offload_fraction}")
     print(f"Offload Directory: {offload_dir}")
     print(f"Seq_len: {max_seq_length}, batch_size: {batch_size}")
+    print(f"Full-length dummy data: {full_length_data}")
     print(f"Warm-up steps: {warm_steps}, test steps: {test_steps} ")
 
     os.makedirs(offload_dir, exist_ok=True)
@@ -182,7 +185,8 @@ def benchmark_model(
     )
     
     # 4. 准备数据集
-    dataset = DummyDataset(
+    dataset_cls = FullLengthDummyDataset if full_length_data else DummyDataset
+    dataset = dataset_cls(
         size=(warm_steps + test_steps) * batch_size,
         tokenizer=tokenizer,
         max_length=max_seq_length
@@ -329,5 +333,6 @@ if __name__ == "__main__":
         ac_offload_nvme=args.ac_offload_nvme,
         nvme_offload_fraction=args.nvme_offload_fraction,
         offload_dir=args.offload_dir,
+        full_length_data=args.full_length_data,
         result_file=args.result_file
     )
