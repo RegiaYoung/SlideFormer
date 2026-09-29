@@ -88,15 +88,15 @@ conda env create -f environment.yml
 conda activate slideformer
 ```
 
-For Qwen3.6 and Gemma 4, use a separate Python 3.12 environment with
-CUDA-enabled PyTorch 2.11.0, a CUDA toolkit and an OpenMP-capable C++ compiler:
+For newer models such as Qwen3.6 and Gemma 4, we recommend using the updated
+dependencies in [`requirements-models.txt`](requirements-models.txt):
 
 ```bash
 pip install packaging ninja==1.13.0
 pip install --no-build-isolation -r requirements-models.txt
 ```
 
-Select `--attn_implementation sdpa` when running these models.
+We recommend `--attn_implementation sdpa` for these models.
 
 Core dependencies are
 [`torch`](https://docs.pytorch.org/docs/stable/index.html),
