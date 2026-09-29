@@ -11,6 +11,7 @@ from transformers.modeling_utils import PreTrainedModel
 from typing import Dict, Any, Optional
 from collections import OrderedDict
 from utils.timer import LayerTimer
+from utils.model_compat import build_decoder_attention_mask, call_decoder_layer
 from utils.legacy_fused_linear_cross_entropy import LegacyFusedLinearCrossEntropyLoss
 from sliding_checkpoint import SlidingCheckpoint, save_on_cpu
 import time
@@ -23,56 +24,6 @@ _d2h_stream = _h2d_stream
 # Chunked H2D overlaps fp32->bf16 CPU conversion with PCIe DMA.
 H2D_CHUNK_SIZE = 32 * 1024 * 1024
 D2H_CHUNK_SIZE = 32 * 1024 * 1024
-
-def build_decoder_attention_mask(
-    decoder: nn.Module,
-    hidden_states: torch.Tensor,
-    attention_mask: Optional[torch.Tensor] = None,
-    position_ids: Optional[torch.LongTensor] = None,
-    cache_position: Optional[torch.LongTensor] = None,
-    past_key_values=None,
-):
-    """Build the decoder attention mask for llama-like dense models across HF versions."""
-    decoder_config = decoder.config
-
-    legacy_update_causal_mask = getattr(decoder, "_update_causal_mask", None)
-    if legacy_update_causal_mask is not None:
-        try:
-            return legacy_update_causal_mask(
-                attention_mask,
-                hidden_states,
-                cache_position,
-                past_key_values,
-                None,
-            )
-        except TypeError:
-            return legacy_update_causal_mask(
-                attention_mask,
-                hidden_states,
-                cache_position,
-                past_key_values,
-            )
-
-    try:
-        from transformers.masking_utils import create_causal_mask
-    except ImportError as exc:
-        raise RuntimeError(
-            "Could not import `transformers.masking_utils`. "
-            "Please use a transformers version that provides either "
-            "`decoder._update_causal_mask` (v4.x) or `masking_utils.create_causal_mask` (v5.x)."
-        ) from exc
-
-    if position_ids is None and cache_position is not None:
-        position_ids = cache_position.unsqueeze(0)
-
-    return create_causal_mask(
-        config=decoder_config,
-        inputs_embeds=hidden_states,
-        attention_mask=attention_mask,
-        cache_position=cache_position,
-        past_key_values=past_key_values,
-        position_ids=position_ids,
-    )
 
 def split_transformer_model(
     model: PreTrainedModel,
@@ -123,6 +74,7 @@ def split_transformer_model(
     for idx, layer in enumerate(layers, start=1):
         decoder_layer = DecoderWrapper(
             layer=layer,
+            collect_router=bool(getattr(model.config, "output_router_logits", False)),
             device=device,
             layer_idx=idx,
             offload_device=torch.device("cpu"),
@@ -137,6 +89,7 @@ def split_transformer_model(
     output_layer = OutputWrapper(
         norm_layer=decoder.norm,
         lm_head=model.get_output_embeddings(),
+        softcap=getattr(decoder.config, "final_logit_softcapping", None),
         device=device,
         layer_idx=num_layers + 1,  # 使用num_layers + 1作为输出层索引
         offload_device=torch.device("cpu"),
@@ -192,6 +145,11 @@ class OffloadLayerWrapper(nn.Module):
 
         # 确保层完全在CPU上
         self.layer = layer
+        # Keep model constants (for example Gemma's layer scalar) on the
+        # compute device. Only trainable parameters participate in streaming.
+        for module in layer.modules():
+            for name, buffer in module.named_buffers(recurse=False):
+                module._buffers[name] = buffer.to(device)
 
         # CUDA流和事件
         self.compute_stream = _compute_stream
@@ -584,34 +542,20 @@ class DecoderWrapper(OffloadLayerWrapper):
     """Decoder层的实现"""
     def __init__(self, *args, **kwargs):
         # 添加layer_cpu_tensors参数
+        self.collect_router = kwargs.pop('collect_router', False)
         self.ac_offload_nvme = kwargs.pop('ac_offload_nvme', False)
         self.layer_cpu_tensors = kwargs.pop('layer_cpu_tensors', None)
         self.layer_nvme_paths = kwargs.pop('layer_nvme_paths', None)
         super().__init__(*args, **kwargs)
 
-    def forward(
-        self,
-        hidden_states,
-        attention_mask=None,
-        position_ids=None,
-        cache_position=None,
-        position_embeddings=None,
-    ):
-        """Decoder层的前向传播实现"""
+    def forward(self, hidden_states, **layer_kwargs):
+        """Run the original HF layer with its prepared model-specific inputs."""
         nvtx.range_push(f"Forward_Layer_{self.layer_idx}")
         with torch.cuda.stream(self.compute_stream):
             start = time.perf_counter() if self.enable_timing else None
 
             def _forward(hidden_states):
-                output = self.layer(
-                    hidden_states,
-                    attention_mask=attention_mask,
-                    position_ids=position_ids,
-                    cache_position=cache_position,
-                    position_embeddings=position_embeddings,
-                    output_attentions=False,
-                )
-                return output[0] if isinstance(output, tuple) else output
+                return call_decoder_layer(self.layer, hidden_states, layer_kwargs, self.collect_router)
 
             # 使用SlidingCheckpoint
             if self.ac_offload_nvme:
@@ -662,14 +606,15 @@ class EmbeddingWrapper(OffloadLayerWrapper):
 
 class OutputWrapper(OffloadLayerWrapper):
     """组合norm, lm_head和CrossEntropyLoss的输出层"""
-    def __init__(self, norm_layer: nn.Module, lm_head: nn.Module, *args, **kwargs):
+    def __init__(self, norm_layer: nn.Module, lm_head: nn.Module, *args, softcap=None, **kwargs):
         # 创建一个Sequential来组合norm和lm_head
         combined_layer = nn.Sequential(norm_layer,lm_head)
         super().__init__(layer=combined_layer, *args, **kwargs)
         self.norm_layer = norm_layer
         self.lm_head = lm_head
         # Use the vendored fused linear cross-entropy implementation.
-        self.lce = LegacyFusedLinearCrossEntropyLoss(reduction="mean")
+        self.softcap = softcap
+        self.lce = LegacyFusedLinearCrossEntropyLoss(reduction="mean", softcap=softcap)
 
     def forward(self, hidden_states, labels=None):
         nvtx.range_push(f"Forward_Layer_{self.layer_idx}")
@@ -680,6 +625,8 @@ class OutputWrapper(OffloadLayerWrapper):
 
             if labels is None:
                 output = self.lm_head(hidden_states)
+                if self.softcap is not None:
+                    output = torch.tanh(output / self.softcap) * self.softcap
             else:
                 shift_hidden_states = hidden_states[..., :-1, :].contiguous()
                 shift_labels = labels[..., 1:].contiguous()
@@ -691,7 +638,7 @@ class OutputWrapper(OffloadLayerWrapper):
                 output = self.lce(
                     self.lm_head.weight,
                     shift_hidden_states,
-                    shift_labels
+                    shift_labels, bias=self.lm_head.bias
                 )
 
 

@@ -28,6 +28,7 @@ def main():
     parser.add_argument("--cpu-threads", type=int, default=1, help="CPU threads per rank; total is ranks times this value")
     parser.add_argument("--chunk-numel", type=int, default=32 * 1024 * 1024)
     parser.add_argument("--double-buffer", action="store_true")
+    parser.add_argument("--attn-implementation", choices=("eager", "sdpa", "flash_attention_2"), default="eager")
     parser.add_argument("--tied", action="store_true", help="Use tied embeddings with --tiny")
     parser.add_argument("--save-model", help="Save final model weights; optimizer resume is not supported")
     args = parser.parse_args()
@@ -44,9 +45,10 @@ def main():
     rank, world = dist.get_rank(), dist.get_world_size()
     if int(os.environ.get("LOCAL_WORLD_SIZE", world)) != world:
         raise ValueError("This entry point supports a single node only")
-    from transformers import AutoModelForCausalLM, LlamaConfig, LlamaForCausalLM
+    from transformers import LlamaConfig, LlamaForCausalLM
     from offload_transformer import SlideFormerOffloader
     from shared_data_parallel import SharedDataParallel
+    from utils.model_compat import load_text_model, save_tokenizer
 
     torch.manual_seed(1234)
     dtype = torch.bfloat16
@@ -55,11 +57,11 @@ def main():
                              num_hidden_layers=2, num_attention_heads=4, num_key_value_heads=2,
                              max_position_embeddings=max(128, args.seq_length),
                              tie_word_embeddings=args.tied, attention_dropout=0.0)
-        config._attn_implementation = "eager"
+        config._attn_implementation = args.attn_implementation
         base_model = LlamaForCausalLM(config).to(dtype=dtype)
     else:
-        base_model = AutoModelForCausalLM.from_pretrained(
-            args.model, torch_dtype=dtype, device_map="cpu", attn_implementation="eager",
+        base_model = load_text_model(
+            args.model, torch_dtype=dtype, device_map="cpu", attn_implementation=args.attn_implementation,
         )
     base_model.config.use_cache = False
     if args.tokens:
@@ -122,6 +124,8 @@ def main():
         print(f"rank={rank} tiny_weight_checks=passed", flush=True)
     if args.save_model:
         model.save_pretrained(args.save_model)
+        if rank == 0 and args.model:
+            save_tokenizer(args.model, args.save_model)
     model.wait_for_completion()
     model.update_executor.shutdown()
     model.h2d_executor.shutdown()

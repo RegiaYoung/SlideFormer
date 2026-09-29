@@ -88,6 +88,16 @@ conda env create -f environment.yml
 conda activate slideformer
 ```
 
+For Qwen3.6 and Gemma 4, use a separate Python 3.12 environment with
+CUDA-enabled PyTorch 2.11.0, a CUDA toolkit and an OpenMP-capable C++ compiler:
+
+```bash
+pip install packaging ninja==1.13.0
+pip install --no-build-isolation -r requirements-models.txt
+```
+
+Select `--attn_implementation sdpa` when running these models.
+
 Core dependencies are
 [`torch`](https://docs.pytorch.org/docs/stable/index.html),
 [`transformers`](https://huggingface.co/docs/transformers/en/index), and
@@ -250,13 +260,13 @@ single-GPU throughput, especially at small batch sizes.
 
 ## Supported Models
 
-- [Qwen2, Qwen2.5, and Qwen3](https://huggingface.co/Qwen)
-- [Llama 3, 3.1, 3.2, and 3.3](https://huggingface.co/meta-llama)
-- [Mistral models](https://huggingface.co/mistralai)
-- Other [HuggingFace decoder-only Transformers](https://huggingface.co/docs/transformers/model_doc/auto#transformers.AutoModelForCausalLM)
+- [Qwen2, Qwen2.5, Qwen3, and Qwen3.6 families](https://huggingface.co/Qwen)
+- [Llama 3, 3.1, 3.2, and 3.3 families](https://huggingface.co/meta-llama)
+- [Mistral family](https://huggingface.co/mistralai)
+- Gemma 4 family: [26B-A4B](https://huggingface.co/google/gemma-4-26B-A4B) and [31B](https://huggingface.co/google/gemma-4-31B).
 
-Some model families may require light adapter changes for full compatibility.
-We will continue expanding tested model support.
+We support full-parameter fine-tuning across a wide range of [Hugging Face](https://huggingface.co/models) language models.
+Support for multimodal models is under active development.
 
 ## Repository Layout
 

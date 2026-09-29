@@ -27,5 +27,10 @@ This distribution includes or adapts third-party software:
   LinkedIn Liger Kernel under the BSD 2-Clause License.
   Upstream: https://github.com/linkedin/Liger-Kernel
 
+Text-model input preparation in utils/model_compat.py follows Hugging Face
+Transformers (Apache License 2.0), including the Qwen3.5 and Gemma 4 model
+implementations. Attention and expert operators remain upstream dependencies.
+Upstream: https://github.com/huggingface/transformers/tree/v5.5.4/src/transformers/models
+
 Third-party names and trademarks belong to their respective owners. This
 NOTICE file is informational and does not modify the terms of LICENSE.

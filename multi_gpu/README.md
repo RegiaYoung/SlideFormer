@@ -35,6 +35,16 @@ pip install -r requirements.txt
 The vendored loss uses the Liger 0.7.0 kernel interface. Liger 0.8.2 has a
 changed interface and is incompatible with this entry point.
 
+For Qwen3.6 and Gemma 4 text models, install this dependency profile instead,
+with PyTorch and the CUDA toolkit already installed:
+
+```bash
+pip install packaging ninja==1.13.0
+pip install --no-build-isolation -r requirements-models.txt
+```
+
+Select `--attn-implementation sdpa` when running these models.
+
 ## Quick start
 
 Run a tiny synthetic smoke check:

@@ -9,6 +9,8 @@ from transformer_layer import (
     build_decoder_attention_mask,
     split_transformer_model,
 )
+from utils.model_compat import (parameter_sizes, prepare_layer_inputs, router_aux_loss,
+                                save_text_weights, validate_model)
 from utils.log_mem import log_memory_stats
 from utils.module_utils import _print_module_structure
 from utils.timer import format_timing_label
@@ -54,6 +56,7 @@ class SlideFormerOffloader(nn.Module):
 
         # 保存对基础模型的引用，以便后续保存
         self.base_model = model
+        validate_model(model)
 
         if not isinstance(device, torch.device):
             raise TypeError("device must be torch.device")
@@ -150,9 +153,7 @@ class SlideFormerOffloader(nn.Module):
 
         # 预估内存占用：复用已有统计量，保持公式简洁
         self.dtype_size_bytes = torch.tensor([], dtype=self.dtype).element_size()
-        self.managed_param_numel = self.total_param - (
-            self.tied_param.numel() if self.is_tied else 0
-        )
+        self.managed_param_numel = self.total_param
         self.stage_buffer_bytes = self.max_param_size * self.dtype_size_bytes
 
         self.param_size_bytes = self.managed_param_numel * 4
@@ -199,28 +200,7 @@ class SlideFormerOffloader(nn.Module):
             self.d2h_executor.shutdown()
 
     def _calculate_max_param_size(self, model):
-        """计算模型所有层中最大的参数数量"""
-        # 计算嵌入层参数数量
-        total_param = 0
-
-        embed_layer = model.get_input_embeddings()
-        embed_size = sum(p.numel() for p in embed_layer.parameters())
-        total_param += embed_size
-
-        # 计算decoder层参数数量
-        decoder = model.get_decoder()
-        layers = decoder.layers
-        decoder_sizes = sum(p.numel() for p in layers[0].parameters())
-        total_param += decoder_sizes * len(layers)
-
-        # 计算输出层参数数量
-        norm_layer = decoder.norm
-        lm_head = model.get_output_embeddings()
-        output_size = sum(p.numel() for p in norm_layer.parameters()) + sum(p.numel() for p in lm_head.parameters())
-        total_param += output_size
-
-        # 返回三种层中的最大值
-        return max(embed_size, decoder_sizes, output_size), total_param
+        return parameter_sizes(model)
 
     def _init_gpu_cache(self):
         """初始化GPU缓存单元"""
@@ -292,8 +272,9 @@ class SlideFormerOffloader(nn.Module):
                         delattr(module, '_backward_start_time')
 
                 module.compute_ready_bw.record(torch.cuda.current_stream())
-                if idx == 0 and self.is_tied:
-                    # Only tied embedding needs deferred update; untied embedding can follow normal layer flow.
+                if idx == 0:
+                    # Integer embedding inputs have no gradients: this hook fires
+                    # before parameter accumulation. Drain it after backward().
                     self._embed_update_pending = True
                     return
 
@@ -329,6 +310,7 @@ class SlideFormerOffloader(nn.Module):
         if check_idx < len(self.transformer_layers):
             prev_update = self.transformer_layers[check_idx].update_finished
 
+        self.embed_layer.compute_ready_bw.record(torch.cuda.current_stream(self.device))
         self.embed_layer.to_offload_async(is_bwd=True, prev_update=prev_update)
         self.embed_layer.update_params()
         self._embed_update_pending = False
@@ -532,25 +514,10 @@ class SlideFormerOffloader(nn.Module):
 
         hidden_states = self.embed_layer(input_ids)
 
-        cache_position = torch.arange(
-            0,
-            hidden_states.shape[1],
-            device=hidden_states.device,
+        layer_inputs = prepare_layer_inputs(
+            self.decoder, hidden_states, attention_mask, position_ids,
         )
-        if position_ids is None:
-            position_ids = cache_position.unsqueeze(0)
-
-        causal_mask = build_decoder_attention_mask(
-            self.decoder,
-            hidden_states,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-            cache_position=cache_position,
-        )
-
-        position_embeddings = None
-        if self.rotary_emb is not None:
-            position_embeddings = self.rotary_emb(hidden_states, position_ids)
+        router_outputs = []
 
         self._ensure_activation_storage(
             batch_size=hidden_states.shape[0],
@@ -561,13 +528,12 @@ class SlideFormerOffloader(nn.Module):
 
         # Forward
         for idx in range(1, len(self.transformer_layers)-1):
-            hidden_states = self.transformer_layers[idx](
-                hidden_states,
-                attention_mask=causal_mask,
-                position_ids=position_ids,
-                cache_position=cache_position,
-                position_embeddings=position_embeddings,
-            )
+            result = self.transformer_layers[idx](hidden_states, **layer_inputs[idx - 1])
+            if self.transformer_layers[idx].collect_router:
+                hidden_states, routing = result
+                router_outputs.append(routing)
+            else:
+                hidden_states = result
 
         # 4. 损失计算
         loss = None
@@ -577,6 +543,9 @@ class SlideFormerOffloader(nn.Module):
 
             # Norm + LM Head + CrossEntropyLoss
             loss = self.output_layer(hidden_states, labels=labels)
+            auxiliary = router_aux_loss(self.base_model, router_outputs, attention_mask)
+            if auxiliary is not None:
+                loss = loss + self.base_model.router_aux_loss_coef * auxiliary
 
 
             if self.enable_memory_stats:
@@ -610,47 +579,12 @@ class SlideFormerOffloader(nn.Module):
         self.layer_optimizer.update_learning_rate(new_lr)
 
     def save_pretrained(self, output_dir):
-        """保存底层预训练模型到指定目录"""
-        if self.shared_dp is not None:
-            # All ranks call this; keep the live shared FP32 views intact.
-            self.wait_for_completion()
-            self.shared_dp.barrier()
-            if self.shared_dp.rank == 0:
-                converted, state_dict = {}, {}
-                for name, value in self.base_model.state_dict(keep_vars=True).items():
-                    if id(value) not in converted:
-                        tensor = value.detach()
-                        converted[id(value)] = tensor.to(dtype=self.dtype) if tensor.is_floating_point() else tensor
-                    state_dict[name] = converted[id(value)]
-                self.base_model.save_pretrained(output_dir, state_dict=state_dict)
-            self.shared_dp.barrier()
-            return output_dir
-        # 确保输出目录存在
-        os.makedirs(output_dir, exist_ok=True)
-
-        print("Going to save model to:", output_dir)
-
-        # 确保所有层都已经被卸载到CPU
-        print("Make sure all layers updated...")
+        """All ranks participate; only rank 0 serializes the shared text weights."""
         self.wait_for_completion()
-        for i, layer in enumerate(self.transformer_layers):
-            # 等待任何未完成的参数更新
-            layer.wait_for_update()
-
-        # 将参数从fp32转换回bf16，确保与预训练模型精度一致
-        print("Converting parameters from fp32 to bf16...")
-        for layer_wrapper in self.transformer_layers:
-            for name, param in layer_wrapper.layer.named_parameters():
-                # 获取当前参数在CPU上的fp32视图
-                cpu_param = param.data
-                # 创建bf16版本
-                bf16_param = cpu_param.to(dtype=self.dtype)
-                # 替换原始参数
-                param.data = bf16_param
-
-        # 保存模型
-        print("saving the model...")
-        self.base_model.save_pretrained(output_dir)
-
-        print(f"Successfully saved the model to {output_dir}")
+        if self.shared_dp is not None:
+            self.shared_dp.barrier()
+        if self.shared_dp is None or self.shared_dp.rank == 0:
+            save_text_weights(self.base_model, output_dir, self.dtype)
+        if self.shared_dp is not None:
+            self.shared_dp.barrier()
         return output_dir

@@ -4,6 +4,10 @@ import torch
 def calculate_flops_per_batch(model, batch_size, seq_length):
     """基于Megatron-LM的FLOPS计算方法, 支持GQA和SwiGLU"""
     config = model.config
+    if config.model_type in {"qwen3_5_text", "qwen3_5_moe_text", "gemma4_text"}:
+        import warnings
+        warnings.warn("The legacy dense FLOP estimate does not cover this architecture; TFLOPS is unavailable.")
+        return float("nan")
     
     # 基本参数
     hidden_size = config.hidden_size

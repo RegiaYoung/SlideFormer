@@ -25,6 +25,7 @@ import numpy as np
 import argparse
 from torch.utils.data import DataLoader, ConcatDataset
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from utils.model_compat import load_text_model
 from datasets import load_dataset
 from utils.metric import calculate_flops_per_batch
 from utils.datasets import MathFusionQADataset
@@ -98,9 +99,9 @@ def train_model(
         tokenizer.pad_token = tokenizer.eos_token
     
     # 2. 确保在 CPU 上加载基础模型 (mem: 8->23.5G)
-    model_cls = AutoLigerKernelForCausalLM or AutoModelForCausalLM
-    base_model = model_cls.from_pretrained(
+    base_model = load_text_model(
         model_path,
+        use_liger=AutoLigerKernelForCausalLM is not None,
         attn_implementation=attn_implementation,
         torch_dtype=dtype,
         device_map="cpu",

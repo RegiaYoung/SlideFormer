@@ -18,6 +18,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from utils.model_compat import load_text_model
 from utils.metric import calculate_flops_per_batch
 # from utils.log_mem import log_memory_stats
 from utils.datasets import DummyDataset, FullLengthDummyDataset
@@ -149,9 +150,9 @@ def benchmark_model(
             "Install liger-kernel for better performance, or pass --no-use_liger to suppress this warning."
         )
         use_liger = False
-    model_cls = AutoLigerKernelForCausalLM if use_liger else AutoModelForCausalLM
-    base_model = model_cls.from_pretrained(
+    base_model = load_text_model(
         model_path,
+        use_liger=use_liger,
         attn_implementation=attn_implementation,
         torch_dtype=dtype,
         device_map="cpu",

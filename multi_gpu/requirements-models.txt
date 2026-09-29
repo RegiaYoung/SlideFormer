@@ -1,0 +1,8 @@
+# Text-model compatibility profile; install CUDA-enabled torch 2.11.0 first.
+# Tested with Python 3.12. Install in a separate environment from legacy model profiles.
+transformers==5.5.4
+accelerate==1.13.0
+liger-kernel==0.7.0
+ninja==1.13.0
+flash-linear-attention==0.5.1
+causal-conv1d==1.6.2.post1
