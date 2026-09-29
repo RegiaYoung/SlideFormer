@@ -41,9 +41,8 @@ three axes that would otherwise skew the comparison:
 This tree is the upstream MegaTrain `main` (`infinity.__version__ == 0.3.0`),
 copied verbatim **except**:
 
-- `benchmark/` and `examples/sft/train_benchmark.py` were dropped — those are
-  SSDP-specific harness files (they import SSDP's `experiment_runner` /
-  `_slim_metric`). We use `mt_bench.py` (below) instead.
+- `benchmark/` and `examples/sft/train_benchmark.py` are omitted. This
+  distribution uses `mt_bench.py` (below) for benchmarking.
 
 The benchmark driver added for SlideFormer:
 
@@ -68,8 +67,7 @@ is fine for benchmarking Qwen2.5 / Qwen3 / Llama models.
 
 Caveat: MegaTrain's newest model configs (e.g. Qwen3.5-27B, GLM-4.6V) may need
 the model class from transformers 5.x. For those, use an env with
-`transformers>=5.0` (e.g. SSDP's `ssdp` env), which is also what MegaTrain's
-authors validate against.
+`transformers>=5.0`, as declared in MegaTrain's requirements.
 
 ## Build (one-time, per env)
 
@@ -96,7 +94,7 @@ Or a single configuration directly:
 
 ```bash
 python mt_bench.py \
-    --model_path /home/scc/models/Qwen3-1.7B \
+    --model_path /path/to/Qwen3-1.7B \
     --seq_len 1024 --batch_size 8 --use_bf16 \
     --warm_step 2 --test_step 3 \
     --result_file mt.csv

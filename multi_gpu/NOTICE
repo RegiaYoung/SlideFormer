@@ -1,0 +1,17 @@
+SlideFormer multi-GPU extension
+Copyright 2025-2026 The SlideFormer Authors
+
+This multi-GPU version extends the published single-GPU SlideFormer runtime:
+https://github.com/RegiaYoung/SlideFormer
+Base revision: 062322fbb1b1f078b4a25dae60640914d0521e0a
+
+This distribution includes components derived from Microsoft DeepSpeed and
+NVIDIA Apex under optimizer/layer_adam/. Original copyright and license
+notices are retained in the corresponding source files.
+
+The vendored fused linear cross-entropy implementation is derived from
+LinkedIn Liger Kernel under the BSD 2-Clause License. Its license is included
+in LICENSES/liger-kernel.txt.
+Upstream: https://github.com/linkedin/Liger-Kernel
+
+This NOTICE is informational and does not modify the terms of LICENSE.

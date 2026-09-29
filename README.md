@@ -39,11 +39,13 @@ If this repository is useful to your work, please consider starring it.
 
 ## News
 
+- **2026.09 — Multi-GPU extension**: A multi-GPU version of SlideFormer is
+  now available in [`multi_gpu/`](multi_gpu/). For our latest research on
+  multi-GPU LLM fine-tuning, see the [SlideDP repository](https://github.com/RegiaYoung/SlideDP)
+  and [arXiv paper](https://arxiv.org/abs/2609.34162).
 - **2026.06**: We released SlideFormer with expanded model compatibility,
   reproducibility scripts, and a new
-  [fine-grained chunked pipeline](#fine-grained-chunked-overlap). A multi-GPU
-  extension of SlideFormer's heterogeneous runtime is under
-  active development and will be documented soon.
+  [fine-grained chunked pipeline](#fine-grained-chunked-overlap).
 - **2026.03**: SlideFormer was accepted to DAC 2026. The conference presentation
   page is available [here](https://63dac.conference-program.com/presentation/?id=RESEARCH1286&sess=sess110), and the paper is available on
   [arXiv](https://arxiv.org/pdf/2603.16428).
@@ -223,6 +225,19 @@ a workload-specific reference rather than a hardware peak.
 
 ## Technical Updates
 
+### Multi-GPU Extension
+
+We provide a reference multi-GPU extension of SlideFormer in
+[`multi_gpu/`](multi_gpu/). It preserves SlideFormer's layer-streaming
+execution while adding synchronous data parallelism with replicated parameter
+delivery and CPU-side gradient reduction. See
+[`multi_gpu/README.md`](multi_gpu/README.md) for setup and usage.
+
+For optimized shared-host multi-GPU execution, follow
+[SlideDP](https://github.com/RegiaYoung/SlideDP) and read the
+[paper](https://arxiv.org/abs/2609.34162). The optimized SlideDP runtime
+described in the paper is not included in this SlideFormer release.
+
 ### Fine-grained Chunked Overlap
 
 The 2026.06 release adds a chunked asynchronous transfer/update pipeline that
@@ -250,6 +265,7 @@ SlideFormer/
 ├── offload_transformer.py      # Runtime engine and scheduling
 ├── transformer_layer.py        # Layer wrappers and CPU-GPU transfers
 ├── sliding_checkpoint.py       # Activation offload and prefetch
+├── multi_gpu/                  # SlideFormer multi-GPU version
 ├── optimizer/                  # Layer-wise CPU Adam optimizer
 ├── utils/                      # Datasets, metrics, and monitor helpers
 ├── scripts/                    # Train, bench, and profile entries

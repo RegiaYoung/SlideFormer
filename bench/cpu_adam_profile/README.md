@@ -11,7 +11,7 @@
 ### 1. 基础测试
 
 ```bash
-cd /home/scc/SSDP/benchmark
+cd bench/cpu_adam_profile
 
 # 运行基础测试（所有模型，自动检测线程数）
 python cpu_adam_benchmark.py
@@ -251,4 +251,3 @@ export OMP_NUM_THREADS=16
 # 绑定 NUMA
 numactl --cpunodebind=0 --membind=0 torchrun --nproc_per_node=4 train.py
 ```
-

@@ -1,0 +1,5 @@
+# Install a CUDA-enabled PyTorch build separately; tested with torch 2.11.0.
+transformers==5.5.4
+accelerate==1.13.0
+liger-kernel==0.7.0
+ninja==1.13.0
