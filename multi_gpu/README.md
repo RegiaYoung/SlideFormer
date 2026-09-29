@@ -43,8 +43,6 @@ pip install packaging ninja==1.13.0
 pip install --no-build-isolation -r requirements-models.txt
 ```
 
-We recommend `--attn-implementation sdpa` for these models.
-
 ## Quick start
 
 Run a tiny synthetic smoke check:

@@ -96,8 +96,6 @@ pip install packaging ninja==1.13.0
 pip install --no-build-isolation -r requirements-models.txt
 ```
 
-We recommend `--attn_implementation sdpa` for these models.
-
 Core dependencies are
 [`torch`](https://docs.pytorch.org/docs/stable/index.html),
 [`transformers`](https://huggingface.co/docs/transformers/en/index), and
